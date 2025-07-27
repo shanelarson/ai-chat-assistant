@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI Chat Assistant</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#102539" />
+    <meta name="description" content="AI-powered chat assistant with OpenAI integration" />
+    <link rel="icon" href="data:," />
+    <style>
+      html, body {
+        min-height: 100%;
+        background: #f7fbff;
+        color: #18324c;
+        font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      #root {
+        min-height: 100vh;
+        height: 100%;
+        width: 100vw;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from "/src/ui/components/app.jsx";
+      import { createRoot } from "react-dom/client";
+
+      // Find element
+      const rootEl = document.getElementById("root");
+      if (rootEl) {
+        const root = createRoot(rootEl);
+        root.render(React.createElement(React.default || React));
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,64 @@
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { connectToMongo } from '../functions/mongo.js';
+
+const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key';
+const JWT_EXPIRY = process.env.JWT_EXPIRY || '1d';
+
+// Express handler for user signup
+export default async function signupHandler(req, res) {
+  try {
+    const { email, password } = req.body || {};
+
+    if (
+      !email ||
+      typeof email !== 'string' ||
+      !password ||
+      typeof password !== 'string'
+    ) {
+      return res.status(400).json({ error: 'Email and password are required.' });
+    }
+
+    const db = await connectToMongo();
+    const usersCol = db.collection('users');
+
+    // Check if user already exists
+    const existing = await usersCol.findOne({ email: { $eq: email } });
+    if (existing) {
+      return res.status(409).json({ error: 'User already exists with this email.' });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+
+    // Create user doc
+    const userDoc = {
+      email,
+      password: passwordHash,
+      createdAt: new Date(),
+      tokens: [], // For future: support multiple concurrent tokens/devices
+    };
+
+    // Insert user
+    const { insertedId } = await usersCol.insertOne(userDoc);
+
+    // Generate JWT token
+    const tokenPayload = { userId: insertedId.toString(), email };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+
+    // Store token on user document (push to tokens array)
+    await usersCol.updateOne(
+      { _id: insertedId },
+      { $push: { tokens: token } }
+    );
+
+    // Return token for client to use
+    res.status(201).json({ token });
+
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Signup error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
