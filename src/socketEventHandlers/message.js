@@ -43,6 +43,21 @@ export default async function handleMessage(socket, payload) {
       return;
     }
 
+    // Active "awaiting AI response" block: check if last message is user with no assistant reply
+    // (if last message is user, do not accept new user message)
+    const messagesArr = Array.isArray(conversation.messages) ? conversation.messages : [];
+    if (
+      messagesArr.length > 0 &&
+      messagesArr[messagesArr.length - 1].type === 'user'
+    ) {
+      socket.emit('messageRejected', {
+        error: 'Please wait for the assistant to respond before sending another message.',
+        rejectedMessage: message,
+        conversationId
+      });
+      return;
+    }
+
     // Prepare previous messages
     const prevMessages = Array.isArray(conversation.messages)
       ? conversation.messages
@@ -125,14 +140,12 @@ export default async function handleMessage(socket, payload) {
         }
       }
     });
-
     response.data.on('end', () => {
       socket.emit('messageStreamEnd', { conversationId });
     });
     response.data.on('error', err => {
       socket.emit('errorMessage', { error: 'Error streaming assistant response.' });
     });
-
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('Socket message handler error:', err);

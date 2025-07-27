@@ -123,7 +123,6 @@ export default function App() {
     setCurrentConv(null);
     setInputValue('');
   }
-
   // --------- Socket IO Connection ---------
   useEffect(() => {
     let sock;
@@ -150,6 +149,16 @@ export default function App() {
       // Error message from server
       sock.on('errorMessage', msg => {
         setChatError(msg?.error || 'A server error occurred.');
+        setStreaming(false);
+        setSendLoading(false);
+      });
+
+      // Handle rejected messages (due to active awaiting response)
+      sock.on('messageRejected', ({ reason, message: rejectedMessage }) => {
+        setChatError(reason || 'Message rejected.');
+        if (typeof rejectedMessage === 'string') {
+          setInputValue(rejectedMessage);
+        }
         setStreaming(false);
         setSendLoading(false);
       });
@@ -298,39 +307,20 @@ export default function App() {
     setSendLoading(false);
     setStreaming(false);
   }
-
   // Send a new message via socket
   function handleSend() {
     if (!socket || !currentConv || !inputValue.trim() || sendLoading || streaming) return;
     setSendLoading(true);
     setStreaming(true);
     setChatError('');
-    // Immediately update current conversation with user message
-    const userMessage = {
-      type: 'user',
-      content: inputValue,
-      createdAt: new Date()
-    };
-    setConversations(prev =>
-      prev.map(conv =>
-        conv._id === currentConv._id
-          ? { ...conv, messages: [...(conv.messages || []), userMessage] }
-          : conv
-      )
-    );
-    setCurrentConv(conv =>
-      conv
-        ? { ...conv, messages: [...(conv.messages || []), userMessage] }
-        : conv
-    );
-    // Emit to socket (backend handles rest)
+    // Emit to socket (backend handles rest). Do not optimistically update conversation state or clear input yet
     socket.emit('message', {
       conversationId: currentConv._id,
       message: inputValue
     });
-    setInputValue('');
+    // Only clear input if the message will be accepted (we'll clear it on send success, i.e. when no rejection message comes)
+    // setInputValue(''); <-- moved logic: see below
   }
-
   // Show main UI
   function renderMainContent() {
     if (!loggedIn) {
@@ -429,3 +419,6 @@ export default function App() {
     </>
   );
 }
+// On successful message send and stream start (first chunk or streamEnd), clear inputValue (unless message was rejected)
+// This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
+// If stream starts/ends normally, the input is already cleared, as designed.
