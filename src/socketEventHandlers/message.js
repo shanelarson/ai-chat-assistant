@@ -104,12 +104,45 @@ export default async function handleMessage(socket, payload) {
       stream: true
     };
     // OpenAI streaming using response.data as a readable stream
-    const response = await openai.chat.completions.create(
-      { ...completionOpts, stream: true },
-      { responseType: 'stream' }
-    );
+    let response;
+    try {
+      response = await openai.chat.completions.create(
+        { ...completionOpts, stream: true },
+        { responseType: 'stream' }
+      );
+    } catch (apiErr) {
+      // eslint-disable-next-line no-console
+      console.error('OpenAI API create error:', apiErr);
+      socket.emit('errorMessage', { error: 'Error connecting to OpenAI: ' + (apiErr?.message || 'Unknown error') });
+      return;
+    }
     let assistantMsg = '';
     let messageId = null;
+
+    // Defensive: make sure response.data is a stream before using .on
+    if (!response || !response.data || typeof response.data.on !== 'function') {
+      // eslint-disable-next-line no-console
+      console.error(
+        'OpenAI API: response.data is not a stream',
+        {
+          responseType: typeof response,
+          hasData: !!response && !!response.data,
+          dataType: response && typeof response.data,
+          dataKeys: response && response.data ? Object.keys(response.data) : undefined,
+          // If possible, print error payload (for non-stream OpenAI error responses)
+          openaiError: response && response.data && response.data.error ? response.data.error : undefined,
+        }
+      );
+      socket.emit('errorMessage', {
+        error:
+          'Could not connect to OpenAI or stream response. Please try again. ' +
+          ((response && response.data && response.data.error && response.data.error.message)
+            ? `Upstream error: ${response.data.error.message}`
+            : ''
+          )
+      });
+      return;
+    }
 
     response.data.on('data', async chunk => {
       // Accumulate the result; parse lines
@@ -170,5 +203,6 @@ export default async function handleMessage(socket, payload) {
 // Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
 // Event names must match between frontend and backend (see app.jsx and here).
 // See documentation for configuration of environment variables for CORS and ports.
+
 
 
