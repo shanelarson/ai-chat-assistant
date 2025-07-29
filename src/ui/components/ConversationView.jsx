@@ -23,6 +23,7 @@ import ImageUploadInput from './ImageUploadInput.jsx';
  * Unified ConversationView for chat UI, with image upload.
  * IMAGE STATE is managed locally in this component (full control).
  */
+// Expose the file input ref reset to parent for proper clearing after send
 export default function ConversationView({
   conversation,
   loading,
@@ -32,14 +33,24 @@ export default function ConversationView({
   onSend,
   disabled,
   placeholder,
-  error
+  error,
+  // Added for file input ref reset
+  onFileInputRef
 }) {
   const messagesEndRef = useRef(null);
   // --- Images state for send box ---
   const [images, setImages] = useState([]);
   const [imgError, setImgError] = useState('');
-  // No longer clear images when text is deleted: only clear on send or conversation switch, not when input becomes empty.
-  // (Clearing logic should be handled in parent/App.jsx when needed.)
+  // Ref to access the file input in ImageUploadInput for reset requests
+  const imageInputRef = useRef();
+
+  useEffect(() => {
+    if (onFileInputRef) {
+      // Provide to parent so it can call .current.reset() after send
+      onFileInputRef(imageInputRef);
+    }
+  }, [onFileInputRef]);
+
   useEffect(() => {
     if (messagesEndRef.current) {
       // Scroll to bottom on new messages/stream
@@ -51,20 +62,11 @@ export default function ConversationView({
     setImages(newImages);
     setImgError('');
   }
-  // NOTE: Pending user message is handled by the parent (App) for optimal stability, so we no longer manage local pendingUserMessage here!
-
   // Omit separate image and text message logic: unified into one user message per send
   const hasPendingImages = Array.isArray(images) && images.some(img => (!img.dataUrl && !img.error) || img.error);
   const validImageCount = images.filter(img => img.dataUrl && !img.error).length;
-  // Allow send if there's text or at least one valid image, and no pending errors/loading/streaming
-  const sendAllowed =
-    (!disabled && !loading && !streaming && !hasPendingImages) &&
-    ((inputValue && inputValue.trim().length > 0) || validImageCount > 0);
   let messageInputError = error || imgError;
-  // Always trust backend for images: render from message content url directly (do not try to reconstruct or "reload" base64)
   let messages = conversation?.messages || [];
-
-  // Sort all messages (pending, streaming, backend) by timestamp for maximum stability
   function getMsgTimestamp(msg) {
     if (msg.createdAt) return new Date(msg.createdAt).getTime();
     if (msg._id && typeof msg._id === 'string' && msg._id.length === 24) {
@@ -85,10 +87,7 @@ export default function ConversationView({
     });
     return arr;
   }, [messages && messages.length, JSON.stringify(messages)]);
-
-  // Only show image preview (above input) before Send is pressed, and not if a message send is in progress
   const showPendingImagePreview = (images.length > 0 && images.some(img => img.dataUrl && !img.error) && !loading && !streaming);
-
   return (
     <section style={{
       flex: 1,
@@ -129,7 +128,6 @@ export default function ConversationView({
         ) : (
           <>
             {sortedMessages.map((msg, idx) => {
-              // Defensive: Only render supported types, never 'image'.
               const type = msg.type || (msg.role === 'assistant' ? 'assistant' : 'user');
               const content = msg.content;
               return (
@@ -162,6 +160,7 @@ export default function ConversationView({
           onChange={handleImageChange}
           loading={loading || streaming || disabled}
           error={imgError}
+          inputRefForward={imageInputRef}
         />
         <MessageInput
           value={inputValue}
@@ -668,8 +667,6 @@ function ChatMarkdownContent({ isUser, type, text }) {
 // NOTE: This component and all content rendering must defensively guard against object-as-child.
 // All mapping over normalizedContent (and markdown code blocks) must never create object children.
 // Only recognized strings, numbers, or elements are rendered; all others trigger a placeholder warning.
-
-
 // Renders text input ONLY (for composition area, used below images)
 function MessageInput({
   value,
@@ -778,6 +775,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 

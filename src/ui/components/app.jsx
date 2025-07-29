@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from './Navbar.jsx';
 import LoginModal from './LoginModal.jsx';
 import SignupModal from './SignupModal.jsx';
@@ -309,6 +309,8 @@ function App() {
     // Placeholder -- now handled in ConversationView, including image validation and calling onSend as needed.
     // This function remains for API compatibility, but does not handle images directly.
   }
+  // Ref to allow clearing the file input in ImageUploadInput after send
+  const imageInputRef = useRef();
   // Show main UI
   function renderMainContent() {
     if (!loggedIn) {
@@ -489,6 +491,10 @@ function App() {
                     });
                     setInputValue('');
                     setImages([]); // Clear images after send (NEW CONVO)
+                    // Reset file input so attached files are cleared too
+                    if (imageInputRef.current) {
+                      imageInputRef.current.value = '';
+                    }
                     setPendingUserMsg({ ...pendingMsgObj, conversationId: newConv._id });
                   } else {
                     setChatError('Failed to create new conversation.');
@@ -516,6 +522,10 @@ function App() {
               });
               setInputValue('');
               setImages([]); // Clear images after send (EXISTING CONVO)
+              // Reset file input so attached files are cleared too
+              if (imageInputRef.current) {
+                imageInputRef.current.value = '';
+              }
               setPendingUserMsg({ ...pendingMsgObj, conversationId: currentConv._id });
             }}
             disabled={sendLoading || streaming || convLoading}
@@ -523,6 +533,7 @@ function App() {
             error={chatError}
             images={images}
             onImagesChange={setImages}
+            imageInputRef={imageInputRef}
           />
         </div>
       </div>
@@ -644,8 +655,4 @@ export { }
 
 
 export default App;
-
-
-
-
 
