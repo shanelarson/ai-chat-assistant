@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { connectToMongo } from '../functions/mongo.js';
+import { logDbEnvContext } from '../functions/logDbEnv.js';
 
 // Enforce strict requirement for JWT_SECRET in production
 function getJwtSecret() {
@@ -14,6 +15,12 @@ function getJwtSecret() {
 // Express middleware to authenticate user via Bearer token in Authorization header
 export default async function authMiddleware(req, res, next) {
   try {
+    // ADDITIONAL DIAGNOSTICS: Log db/env context on first auth call of process
+    if (!process._hasLoggedDbEnvContext) {
+      await logDbEnvContext('REST AuthMiddleware Startup');
+      process._hasLoggedDbEnvContext = true;
+    }
+
     const header = req.headers['authorization'];
     if (!header || typeof header !== 'string' || !header.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Missing or invalid Authorization header.' });
@@ -87,6 +94,7 @@ export default async function authMiddleware(req, res, next) {
           decodedEmail: decoded?.email,
           userIdQuery: toObjectId(decoded.userId)
         });
+        await logDbEnvContext('REST AuthMiddleware Token Lookup Failure');
         return res.status(401).json({ error: 'User not found or token revoked.' });
       }
     } catch (e) {
@@ -95,6 +103,7 @@ export default async function authMiddleware(req, res, next) {
         token: token,
         decoded: decoded
       });
+      await logDbEnvContext('REST AuthMiddleware DB Error');
       return res.status(500).json({ error: 'Database error during authentication.' });
     }
     // Attach user and token to request
@@ -104,7 +113,9 @@ export default async function authMiddleware(req, res, next) {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('Auth middleware error:', err);
+    await logDbEnvContext('REST AuthMiddleware General Error');
     res.status(500).json({ error: 'Internal server error (auth).' });
   }
 }
+
 

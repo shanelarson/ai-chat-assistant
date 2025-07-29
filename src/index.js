@@ -15,6 +15,10 @@ dotenv.config();
 import { validateRequiredEnvVars } from './functions/validateEnvVars.js';
 validateRequiredEnvVars();
 
+// ---- (NEW) Log environment/DB context at startup for diagnosis ----
+import { logDbEnvContext } from './functions/logDbEnv.js';
+logDbEnvContext('Startup DB/ENV Context').then();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -64,7 +68,6 @@ app.use('/api/conversations', conversationsRouter);
 // app.use(authMiddleware);
 // app.get('/secure-data', (req, res) => { ... })
 */
-
 // ---- HTTP Listen ----
 const server = http.createServer(app);
 
@@ -84,9 +87,13 @@ const io = new SocketIOServer(server, {
 // Auth middleware for socket.io connections
 import { connectToMongo } from './functions/mongo.js';
 import jwt from 'jsonwebtoken';
+import { logDbEnvContext } from './functions/logDbEnv.js'; // redundant import but safe if later refactored
+
 // Attach user object to socket after verifying JWT token
 io.use(async (socket, next) => {
   try {
+    // Log DB/env context for each new socket auth for easier diagnosis
+    logDbEnvContext('Socket.IO Auth Context').then();
     const { token } = socket.handshake.auth || {};
     if (!token) {
       return next(new Error('Authentication required'));
@@ -207,6 +214,8 @@ server.listen(SERVER_PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`[Express] API + Static server listening on port ${SERVER_PORT}`);
   console.log(`[CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
+  // (NEW) Log DB env context for diagnosis after HTTP server starts
+  logDbEnvContext('HTTP API Startup Context').then();
 });
 
 // Start Socket.IO server on separate port if required
@@ -215,15 +224,7 @@ if (SOCKET_IO_PORT !== SERVER_PORT) {
     // eslint-disable-next-line no-console
     console.log(`[Socket.io] Real-time server listening on port ${SOCKET_IO_PORT}`);
     console.log(`[Socket.io CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
+    logDbEnvContext('Socket.IO Startup Context').then();
   });
 }
-
-
-
-
-
-
-
-
-
 
