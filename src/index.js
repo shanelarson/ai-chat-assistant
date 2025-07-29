@@ -87,8 +87,6 @@ const io = new SocketIOServer(server, {
 // Auth middleware for socket.io connections
 import { connectToMongo } from './functions/mongo.js';
 import jwt from 'jsonwebtoken';
-import { logDbEnvContext } from './functions/logDbEnv.js'; // redundant import but safe if later refactored
-
 // Attach user object to socket after verifying JWT token
 io.use(async (socket, next) => {
   try {
