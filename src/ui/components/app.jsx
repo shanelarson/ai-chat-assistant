@@ -430,6 +430,14 @@ function App() {
               if (sendLoading || streaming || convLoading) {
                 return;
               }
+              // Unified point: Clear image state & UI immediately after send intent (just before backend request)
+              setInputValue('');
+              setImages([]);
+              if (imageInputRef.current) {
+                imageInputRef.current.value = '';
+              }
+              setImageResetSignal(sig => sig + 1);
+
               let userMsgContent;
               if (hasImages) {
                 userMsgContent = [
@@ -483,8 +491,6 @@ function App() {
                         size: img.size || img.file?.size
                       }))
                     });
-                    setInputValue('');
-                    setImages([]);
                     setPendingUserMsg({ ...pendingMsgObj, conversationId: newConv._id });
                   } else {
                     setChatError('Failed to create new conversation.');
@@ -509,7 +515,6 @@ function App() {
                   size: img.size || img.file?.size
                 }))
               });
-              setInputValue('');
               setPendingUserMsg({ ...pendingMsgObj, conversationId: currentConv._id });
             }}
             disabled={sendLoading || streaming || convLoading}
@@ -546,13 +551,7 @@ function App() {
       );
       if (found) {
         setPendingUserMsg(null);
-        setImages([]);
-        setInputValue(''); // Also clear the text input
-        // Reset file input so attached files are cleared too, and propagate fresh reset signal to ImageUploadInput
-        if (imageInputRef.current) {
-          imageInputRef.current.value = '';
-        }
-        setImageResetSignal(sig => sig + 1);
+        // The inputs are now cleared right after send, so only clear pending message here.
         imagesCleared = true;
       }
     }
