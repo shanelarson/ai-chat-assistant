@@ -424,6 +424,7 @@ function App() {
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            paddingRight: 20,
           }}
         >
           <ConversationView
@@ -498,5 +499,6 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
+
 
 
