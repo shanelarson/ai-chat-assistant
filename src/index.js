@@ -18,7 +18,7 @@ const __dirname = path.dirname(__filename);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const SERVER_PORT = process.env.SERVER_PORT || 3000;
 const SOCKET_IO_PORT = process.env.SOCKET_IO_PORT || 4000;
-const CORS_ORIGIN = (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',').map(x => x.trim());
+const CORS_ORIGIN = (process.env.CORS_ORIGIN || 'http://localhost:1234').split(',').map(x => x.trim());
 
 // ---- Create Express App ----
 const app = express();
@@ -111,6 +111,7 @@ io.on('connection', (socket) => {
 server.listen(SERVER_PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`[Express] API + Static server listening on port ${SERVER_PORT}`);
+  console.log(`[CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
 });
 io.listen(SOCKET_IO_PORT, () => {
   // eslint-disable-next-line no-console
