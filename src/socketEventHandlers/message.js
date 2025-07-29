@@ -148,7 +148,7 @@ export default async function handleMessage(socket, payload) {
     const prevMessages = Array.isArray(conversation.messages)
       ? conversation.messages
       : [];
-    // Build the user message: If images, use multimodal OpenAI format.
+    // Build the user message: Always an object. 
     let userMsgForDb;
     let openAIMsgContent;
     if (validatedImages.length > 0) {
@@ -173,13 +173,14 @@ export default async function handleMessage(socket, payload) {
       };
     } else {
       openAIMsgContent = message;
+      // Always store user messages as objects, even text-only!
       userMsgForDb = {
         type: 'user',
         content: message,
         createdAt: new Date()
       };
     }
-    // Persist both text and image data as `content` array if multimodal, or string if not.
+    // Always store user message as an object record in the DB
     await conversationsCol.updateOne(
       { _id: conversation._id },
       {
@@ -224,6 +225,7 @@ export default async function handleMessage(socket, payload) {
       }
       // After stream done, push assistant message to DB if any content
       if (assistantMsg) {
+        // Always store assistant messages as objects (never as raw string)
         const assistantEntry = {
           type: 'assistant',
           content: assistantMsg,
@@ -273,7 +275,4 @@ export default async function handleMessage(socket, payload) {
 // Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
 // Event names must match between frontend and backend (see app.jsx and here).
 // See documentation for configuration of environment variables for CORS and ports.
-
-
-
 

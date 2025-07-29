@@ -157,15 +157,26 @@ export default function ConversationView({
             No messages in this conversation yet.
           </div>
         ))}
-        {conversation && messages.map((msg, idx) => (
-          <MessageBubble
-            key={idx}
-            type={msg.type}
-            content={msg.content}
-            index={idx}
-            label={msg.type === 'user' ? 'User' : 'Assistant'}
-          />
-        ))}
+        {conversation && Array.isArray(messages) && messages.length > 0 && messages.map((msg, idx) => {
+          // Defensive: Always expect object form with type/content
+          const type = msg.type || (msg.role === 'assistant' ? 'assistant' : 'user');
+          let content = msg.content;
+          // For legacy: if user message is string, wrap as text
+          if (type === 'user' && typeof content === 'string') {
+            content = content;
+          }
+          // For messages with multimodal images from old data shape: 
+          // handled in MessageBubble below (object/array).
+          return (
+            <MessageBubble
+              key={idx}
+              type={type}
+              content={content}
+              index={idx}
+              label={type === 'user' ? 'User' : 'Assistant'}
+            />
+          );
+        })}
         {conversation && streaming && (
           <MessageBubble
             type="assistant"
@@ -484,6 +495,11 @@ function MessageBubble({ type, content, streaming, label }) {
       <div style={bubbleStyle}>
         {renderedContent}
       </div>
+
+
+
+
+
     </div>
   );
 }
@@ -677,6 +693,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
