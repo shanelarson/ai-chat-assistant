@@ -137,10 +137,16 @@ export default function ConversationView({
   );
 }
 // Render a message bubble in chat UI: `type` is 'user' or 'assistant'
+/**
+ * MessageBubble component: renders a chat message.
+ * 
+ * - For assistant messages that are still streaming (incomplete), do NOT parse markdown or highlight code.
+ *   Instead, display content as preformatted plain text (preserving all language tags, code fences, etc).
+ *   This ensures the code highlighter and markdown parser receive fully-formed code blocks when the message is finalized.
+ * - For finalized messages (not streaming), use markdown parsing and syntax highlighting for code blocks.
+ */
 function MessageBubble({ type, content, streaming, label }) {
   const isUser = type === 'user';
-  // For accessibility: use semantic elements and allow free text selection.
-  // markdownBodyClass: to apply github-markdown-css; outer style tweaks bubble color and border.
   const bubbleStyle = {
     maxWidth: '85%',
     padding: '0.7em 1.1em',
@@ -156,7 +162,7 @@ function MessageBubble({ type, content, streaming, label }) {
     whiteSpace: 'pre-line'
   };
 
-  // If Typing indicator, don't markdown-render, just show span as before.
+  // 1. If Typing indicator, just show as before, not markdown
   if (typeof content !== 'string' && React.isValidElement(content)) {
     return (
       <div
@@ -209,44 +215,93 @@ function MessageBubble({ type, content, streaming, label }) {
     );
   }
 
-  // Markdown render, fallback to pre on error
+  // 2. If assistant message and streaming (i.e. incomplete, may contain partial markdown/code blocks),
+  //    ALWAYS render as preformatted plain text, NOT markdown, to preserve unfinished code blocks/language tags etc.
+  //    This avoids broken parsing, broken code fences, and allows post-stream code highlighting to work!
+  if (!isUser && streaming) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-start',
+          marginBottom: 12,
+          flexDirection: 'column',
+          alignItems: 'flex-start'
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginBottom: 2,
+          }}
+        >
+          <span style={{
+            fontSize: 12,
+            color: '#d0b900',
+            fontWeight: 600,
+            marginRight: 8,
+            background: 'rgba(220,220,255,0.17)',
+            padding: '0 6px',
+            borderRadius: 5,
+            letterSpacing: 0.2
+          }}>
+            {label || 'Assistant'}
+          </span>
+        </div>
+        <div style={bubbleStyle}>
+          <pre
+            style={{
+              margin: 0,
+              fontFamily: "inherit",
+              fontSize: 15,
+              background: 'transparent',
+              border: 'none',
+              color: '#555',
+              whiteSpace: "pre-wrap",
+              wordBreak: 'break-word',
+              padding: 0
+            }}
+            tabIndex={0}
+            aria-label="Assistant is typing"
+          >
+            {/* render as string, coerce null/undefined to blank */}
+            {typeof content === 'string' ? content : String(content ?? '')}
+          </pre>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. All other cases (finalized messages): render with markdown and code highlighting
   let renderedContent;
   try {
     renderedContent = (
       <div
         className="markdown-body"
         style={{
-          // Enable text selection
           userSelect: "text",
-          // Remove default margin to fit bubble
           margin: 0,
-          // inherit width
           wordBreak: "break-word",
         }}
-        // For screen readers, let the markdown be interpreted as content.
         tabIndex={0}
       >
         <ReactMarkdown
-          // Always treat as string (should already be - but just in case)
           children={typeof content === 'string' ? content : String(content ?? '')}
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSanitize]}
           linkTarget="_blank"
           components={{
-            // Open links in new tab & with correct rel
             a: ({ node, ...props }) => (
               <a {...props} target="_blank" rel="noopener noreferrer">{props.children}</a>
             ),
             code({ node, inline, className, children, ...props }) {
-              // Use CodeBlock for block-level code blocks with supported language
               const lang = getLanguage(className);
               const isSupported = SUPPORTED_LANGS.includes(lang);
               if (!inline && isSupported) {
-                // join children in case react-markdown passes as array
                 const codeString = Array.isArray(children) ? children.join('') : String(children);
                 return <CodeBlock value={codeString} language={lang} className={className} />;
               }
-              // For inline or other code, keep original
               return (
                 <code className={className} style={{
                   background: "#f6f8fa",
@@ -265,10 +320,6 @@ function MessageBubble({ type, content, streaming, label }) {
           }}
         />
       </div>
-
-
-
-
     );
   } catch (err) {
     // Fallback: render safe pre block
@@ -280,7 +331,9 @@ function MessageBubble({ type, content, streaming, label }) {
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
         color: "#b80024"
-      }}>{typeof content === 'string' ? content : String(content ?? '')}</pre>
+      }}>
+        {typeof content === 'string' ? content : String(content ?? '')}
+      </pre>
     );
   }
 
@@ -336,6 +389,11 @@ function MessageBubble({ type, content, streaming, label }) {
     </div>
   );
 }
+
+
+
+
+
 
 // Renders text input (fixed bottom) for new message
 function MessageInput({
@@ -421,6 +479,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
