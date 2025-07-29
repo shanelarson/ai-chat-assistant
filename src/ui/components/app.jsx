@@ -377,8 +377,6 @@ function App() {
               currentConv
                 ? {
                     ...currentConv,
-                    // Compose the local user message (pending/optimistic) and ensure message order is by createdAt
-                    // The composition enforces a strict sequence: User → Assistant → User → Assistant with sorting
                     messages: (() => {
                       // Start with backend messages
                       let msgs = Array.isArray(currentConv.messages) ? [...currentConv.messages] : [];
@@ -390,7 +388,6 @@ function App() {
                         !msgs.some(
                           m =>
                             m.type === 'user' &&
-                            // match createdAt within a small margin (clock drift) and identical content
                             m.createdAt &&
                             pendingUserMsg.createdAt &&
                             Math.abs(new Date(m.createdAt).getTime() - new Date(pendingUserMsg.createdAt).getTime()) < 3000 &&
@@ -399,11 +396,9 @@ function App() {
                       ) {
                         showPending = true;
                       }
-                      // Compose candidate messages
                       if (showPending) {
                         msgs.push(pendingUserMsg);
                       }
-                      // Add streaming assistant msg as a temporary message (not persisted yet)
                       if (currentConv.streamingAssistantMsg) {
                         msgs.push({
                           type: 'assistant',
@@ -411,7 +406,6 @@ function App() {
                           createdAt: new Date()
                         });
                       }
-                      // Sort by createdAt (ObjectID fallback, then array order as ultimate fallback)
                       msgs = [...msgs].sort((a, b) => {
                         const aTime = getMsgTimestamp(a);
                         const bTime = getMsgTimestamp(b);
@@ -420,7 +414,12 @@ function App() {
                       return msgs;
                     })()
                   }
-                : null
+                : // If there's a pending user message and no conversation exists (start new conversation screen after sending the first message)
+                  (pendingUserMsg
+                    ? {
+                        messages: [pendingUserMsg]
+                      }
+                    : null)
             }
             loading={sendLoading}
             streaming={streaming}
@@ -431,7 +430,6 @@ function App() {
               const trimmedMsg = typeof messageToSend === "string" ? messageToSend.trim() : "";
               const hasText = trimmedMsg.length > 0;
               const hasImages = Array.isArray(imagesToSend) && imagesToSend.length > 0;
-              // Prevent sending if both are missing, show error inline
               if (!hasText && !hasImages) {
                 setChatError("Please enter a message or attach an image before sending.");
                 return;
@@ -439,11 +437,8 @@ function App() {
               if (sendLoading || streaming || convLoading) {
                 return;
               }
-              // Compose the message in the correct structure (OpenAI multimodal format or string)
-              // Always use OpenAI multimodal format: one user message with content array (images + text) or string
               let userMsgContent;
               if (hasImages) {
-                // Only add text if present; for images-only, skip text entry.
                 userMsgContent = [
                   ...imagesToSend.map(img => ({
                     type: 'image_url',
@@ -460,10 +455,9 @@ function App() {
                 content: userMsgContent,
                 createdAt: now,
                 pending: true,
-                conversationId: currentConv && currentConv._id
+                // New conversation doesn't have _id yet, so omit conversationId
               };
               setPendingUserMsg(pendingMsgObj);
-              // If no conversation selected (starting new), create one and send the message
               if (!currentConv || !currentConv._id) {
                 setSendLoading(true);
                 setChatError('');
@@ -500,7 +494,7 @@ function App() {
               // Existing conversation: send as normal
               setSendLoading(true);
               setChatError('');
-              setStreaming(true); // expect stream
+              setStreaming(true);
               socket.emit('message', {
                 conversationId: currentConv._id,
                 message: trimmedMsg,
@@ -540,7 +534,6 @@ function App() {
     }
     // Also clear if a new conversation is selected
   }, [currentConv && currentConv.messages && currentConv.messages.length, currentConv && currentConv._id, pendingUserMsg]);
-
   // Helpers for stable message ordering and deep content comparison
   function getMsgTimestamp(msg) {
     // Support fallback for legacy msgs w/o createdAt (extract from ObjectID, or use 0/now)
@@ -581,8 +574,6 @@ function App() {
 // - This prevents flicker, duplication, and missing-message bugs, making chat order stable after refresh or state churn.
 // - For legacy messages without createdAt, ObjectID is used for best-effort sorting, else default to now().
 // - See developer documentation and comments for additional reasoning and maintenance guidance.
-
-
   // -------- Main App Render ---------
   return (
     <>
@@ -631,6 +622,7 @@ export default App;
 
 
  
+
 
 
 

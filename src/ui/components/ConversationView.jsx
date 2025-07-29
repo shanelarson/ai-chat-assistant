@@ -119,7 +119,7 @@ export default function ConversationView({
         flexDirection: 'column',
         minHeight: 0
       }}>
-        {!conversation ? (
+        {(!conversation && (!messages || messages.length === 0)) ? (
           <div style={{
             textAlign: 'center',
             color: '#b7bfcf',
@@ -130,7 +130,7 @@ export default function ConversationView({
           }}>
             Start a New Conversation
           </div>
-        ) : (messages.length === 0 && (
+        ) : ((messages && messages.length === 0) ? (
           <div style={{
             textAlign: 'center',
             color: '#abb4c7',
@@ -140,15 +140,12 @@ export default function ConversationView({
           }}>
             No messages in this conversation yet.
           </div>
-        ))}
-        {/* Show optimistic/pending user message immediately after send; only a single user message created (with images/text in content) */}
-        {conversation && Array.isArray(messages) && messages.length > 0 && (
+        ) : (
           <>
             {sortedMessages.map((msg, idx) => {
               // Defensive: Only render supported types, never 'image'.
               const type = msg.type || (msg.role === 'assistant' ? 'assistant' : 'user');
               const content = msg.content;
-              // Deduplicate: If not marked as pending, but matches a prior pendingUserMsg (very unlikely) skip, else render as usual
               return (
                 <MessageBubble
                   key={msg.createdAt ? `${type}-${msg.createdAt}-${idx}` : idx}
@@ -161,8 +158,8 @@ export default function ConversationView({
               );
             })}
           </>
-        )}
-        {conversation && streaming && (
+        ))}
+        {((conversation && streaming) || (!conversation && streaming)) && (
           <MessageBubble
             type="assistant"
             content={<span style={{ color: '#aaa' }}>Typing...</span>}
@@ -486,11 +483,7 @@ function MessageBubble({ type, content, streaming, label, pending }) {
           </span>
         )}
       </div>
-
-// Note: This component now expects to receive all messages (including pending/optimistic user messages) already composed and sorted by the parent.
-// The parent (App.jsx or equivalent) must merge any pendingUserMsg, ensure de-duped, and sort by createdAt/ObjectID time for absolute consistency.
-// This prevents race conditions, duplicate display, or user message drop-outs especially under async load.
-// See main App logic for details.
+  // Note: The developer note about message merging/sorting is intentionally NOT displayed in UI. See source comments/app logic for details.
 
       <div style={bubbleStyle}>
         {renderedContent}
@@ -694,6 +687,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
