@@ -210,6 +210,24 @@ function MessageBubble({ type, content, streaming, label, pending }) {
 
   // Pending (optimistic) messages may be styled slightly distinct (opacity, italic), but for now same appearance.
 
+  // ---- DEFENSIVE PATCH for: If content is a plain object with {type: ...} and e.g. {type:'image_url', image_url:{...}},
+  // wrap it in an array to handle OpenAI multimodal single-part format or accidental non-array
+  let normalizedContent = content;
+  if (
+    content &&
+    typeof content === "object" &&
+    !Array.isArray(content) &&
+    // Not legacy {images:..., text:...}
+    !(content.images && Array.isArray(content.images)) &&
+    // Probably a single-part OpenAI message: {type:..., ...}
+    (
+      (content.type === 'image_url' && content.image_url && typeof content.image_url === 'object') ||
+      (content.type === 'text' && typeof content.text === 'string')
+    )
+  ) {
+    normalizedContent = [content];
+  }
+
   // 1. If Typing indicator, just show as before, not markdown
   if (typeof content !== 'string' && React.isValidElement(content)) {
     return (
@@ -323,11 +341,11 @@ function MessageBubble({ type, content, streaming, label, pending }) {
   let renderedContent;
 
   // Defensive multimodal rendering for OpenAI-style array content: [{type:..., ...}]
-  if (Array.isArray(content)) {
+  if (Array.isArray(normalizedContent)) {
     // Render image_url and text parts in order
     renderedContent = (
       <div>
-        {content.map((part, idx) => {
+        {normalizedContent.map((part, idx) => {
           if (part && typeof part === 'object' && part.type === 'image_url' && part.image_url && part.image_url.url) {
             return (
               <div key={`image-${idx}`} style={{ marginBottom: 8 }}>
@@ -371,14 +389,14 @@ function MessageBubble({ type, content, streaming, label, pending }) {
         })}
       </div>
     );
-  } else if (content && typeof content === 'object' && content.images && Array.isArray(content.images)) {
+  } else if (normalizedContent && typeof normalizedContent === 'object' && normalizedContent.images && Array.isArray(normalizedContent.images)) {
     // Legacy support: { images: [...], text: ... }
-    const multimodalImages = content.images.map(img => ({
+    const multimodalImages = normalizedContent.images.map(img => ({
       url: img.url,
       detail: img.detail,
       description: img.description,
     }));
-    const multimodalText = content.text || '';
+    const multimodalText = normalizedContent.text || '';
     renderedContent = (
       <div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 4, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -420,7 +438,7 @@ function MessageBubble({ type, content, streaming, label, pending }) {
   } else {
     // Plain text or other fallback types
     renderedContent = (
-      <ChatMarkdownContent isUser={isUser} type={type} text={typeof content === 'string' ? content : String(content ?? '')} />
+      <ChatMarkdownContent isUser={isUser} type={type} text={typeof normalizedContent === 'string' ? normalizedContent : String(normalizedContent ?? '')} />
     );
   }
 
@@ -496,7 +514,7 @@ function MessageBubble({ type, content, streaming, label, pending }) {
 
 
 
- 
+
 
 
 
@@ -708,6 +726,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
