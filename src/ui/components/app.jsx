@@ -490,11 +490,6 @@ function App() {
                       }))
                     });
                     setInputValue('');
-                    setImages([]); // Clear images after send (NEW CONVO)
-                    // Reset file input so attached files are cleared too
-                    if (imageInputRef.current) {
-                      imageInputRef.current.value = '';
-                    }
                     setPendingUserMsg({ ...pendingMsgObj, conversationId: newConv._id });
                   } else {
                     setChatError('Failed to create new conversation.');
@@ -521,11 +516,6 @@ function App() {
                 }))
               });
               setInputValue('');
-              setImages([]); // Clear images after send (EXISTING CONVO)
-              // Reset file input so attached files are cleared too
-              if (imageInputRef.current) {
-                imageInputRef.current.value = '';
-              }
               setPendingUserMsg({ ...pendingMsgObj, conversationId: currentConv._id });
             }}
             disabled={sendLoading || streaming || convLoading}
@@ -546,6 +536,7 @@ function App() {
   // Remove the pending user message ONLY when a fully matching message is confirmed from backend (by content AND createdAt ~margin)
   useEffect(() => {
     if (!pendingUserMsg) return;
+    let imagesCleared = false;
     if (
       currentConv &&
       currentConv.messages &&
@@ -560,6 +551,12 @@ function App() {
       );
       if (found) {
         setPendingUserMsg(null);
+        setImages([]);
+        // Reset file input so attached files are cleared too
+        if (imageInputRef.current) {
+          imageInputRef.current.value = '';
+        }
+        imagesCleared = true;
       }
     }
     // Also clear if a new conversation is selected (e.g. user hits Back/New Conversation)
@@ -571,6 +568,9 @@ function App() {
     ) {
       setPendingUserMsg(null);
       setImages([]); // Clear images when switching conversations
+      if (imageInputRef.current) {
+        imageInputRef.current.value = '';
+      }
     }
   }, [currentConv && currentConv.messages && currentConv.messages.length, currentConv && currentConv._id, pendingUserMsg]);
   // Helpers for stable message ordering and deep content comparison
@@ -650,9 +650,9 @@ function App() {
 // On successful message send and stream start (first chunk or streamEnd), clear inputValue (unless message was rejected)
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
-
 export { }
 
 
 export default App;
+
 
