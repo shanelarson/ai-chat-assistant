@@ -11,6 +11,10 @@ import loginHandler from './httpEndpoints/login.js';
 // ---- Load environment ----
 dotenv.config();
 
+// ---- Validate environment variables ----
+import { validateRequiredEnvVars } from './functions/validateEnvVars.js';
+validateRequiredEnvVars();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -81,8 +85,6 @@ const io = new SocketIOServer(server, {
 import { connectToMongo } from './functions/mongo.js';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key';
-
 // Attach user object to socket after verifying JWT token
 io.use(async (socket, next) => {
   try {
@@ -90,7 +92,15 @@ io.use(async (socket, next) => {
     if (!token) {
       return next(new Error('Authentication required'));
     }
-    const decoded = jwt.verify(token, JWT_SECRET);
+    // Enforce strong JWT secret handling for sockets too
+    const jwtSecret = (() => {
+      const secret = process.env.JWT_SECRET;
+      if (process.env.NODE_ENV === 'production' && (!secret || secret === 'dev_secret_key')) {
+        throw new Error('JWT_SECRET must be set to a strong value in production.');
+      }
+      return secret || 'dev_secret_key';
+    })();
+    const decoded = jwt.verify(token, jwtSecret);
     // Check user exists and token is in user.tokens
     const db = await connectToMongo();
     const usersCol = db.collection('users');
@@ -110,6 +120,12 @@ io.use(async (socket, next) => {
 });
 
 // Register socket.io events
+
+
+
+
+
+
 import handleMessage from './socketEventHandlers/message.js';
 
 io.on('connection', (socket) => {
@@ -136,6 +152,7 @@ if (SOCKET_IO_PORT !== SERVER_PORT) {
     console.log(`[Socket.io CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
   });
 }
+
 
 
 

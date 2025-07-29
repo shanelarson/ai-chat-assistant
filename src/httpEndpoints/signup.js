@@ -2,8 +2,16 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { connectToMongo } from '../functions/mongo.js';
 
+// Secure JWT secret: require it in production, allow fallback only in development
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production' && (!secret || secret === 'dev_secret_key')) {
+    throw new Error('JWT_SECRET must be set to a strong value in production.');
+  }
+  return secret || 'dev_secret_key';
+}
+
 const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '1d';
 
 // Express handler for user signup
@@ -46,7 +54,14 @@ export default async function signupHandler(req, res) {
 
     // Generate JWT token
     const tokenPayload = { userId: insertedId.toString(), email };
-    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+    let jwtSecret;
+    try {
+      jwtSecret = getJwtSecret();
+    } catch (secretErr) {
+      // Fail early if JWT_SECRET is not securely set in production
+      return res.status(500).json({ error: secretErr.message });
+    }
+    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: JWT_EXPIRY });
 
     // Store token on user document (push to tokens array)
     await usersCol.updateOne(
