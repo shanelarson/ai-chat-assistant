@@ -1,4 +1,5 @@
 import { connectToMongo } from '../functions/mongo.js';
+import { ObjectId } from 'mongodb';
 import OpenAI from 'openai';
 
 // Helper to get OpenAI config
@@ -29,17 +30,26 @@ export default async function handleMessage(socket, payload) {
       socket.emit('errorMessage', { error: 'Missing conversationId or message.' });
       return;
     }
-
     const db = await connectToMongo();
     const conversationsCol = db.collection('conversations');
 
+    // Validate conversationId is a valid ObjectId string
+    let conversationObjId;
+    if (typeof conversationId === 'string' && conversationId.length === 24) {
+      try {
+        conversationObjId = new ObjectId(conversationId);
+      } catch (e) {
+        socket.emit('errorMessage', { error: 'Invalid conversation ID.' });
+        return;
+      }
+    } else {
+      socket.emit('errorMessage', { error: 'Invalid conversation ID.' });
+      return;
+    }
+
     // Find conversation and ensure it belongs to user
     const conversation = await conversationsCol.findOne({
-      _id: typeof conversationId === 'string'
-        ? conversationId.length === 24
-          ? new db.bson.ObjectId(conversationId)
-          : conversationId
-        : conversationId,
+      _id: conversationObjId,
       userId: user._id
     });
     if (!conversation) {
@@ -155,8 +165,8 @@ export default async function handleMessage(socket, payload) {
     socket.emit('errorMessage', { error: 'Internal server error.' });
   }
 }
-
 // Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
 // Event names must match between frontend and backend (see app.jsx and here).
 // See documentation for configuration of environment variables for CORS and ports.
+
 

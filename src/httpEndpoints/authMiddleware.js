@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { connectToMongo } from '../functions/mongo.js';
 import { logDbEnvContext } from '../functions/logDbEnv.js';
+import { ObjectId } from 'mongodb';
 
 // Enforce strict requirement for JWT_SECRET in production
 function getJwtSecret() {
@@ -41,22 +42,34 @@ export default async function authMiddleware(req, res, next) {
     // Look up user in DB and confirm token exists (force ObjectId for _id lookup)
     const db = await connectToMongo();
     const usersCol = db.collection('users');
-    const toObjectId = (id) => {
-      if (db.bson && (typeof id === 'string') && id.length === 24) return new db.bson.ObjectId(id);
-      return id;
-    };
     let user;
+    let userIdAsObjectId;
     try {
+      // Validate and convert userId string to ObjectId for lookup (reject if malformed)
+      if (
+        typeof decoded.userId !== 'string' ||
+        decoded.userId.length !== 24 ||
+        !/^[a-fA-F0-9]{24}$/.test(decoded.userId)
+      ) {
+        // eslint-disable-next-line no-console
+        console.error(
+          '[AUTH] Invalid userId in JWT token (not 24-char hex string):',
+          decoded.userId
+        );
+        return res.status(401).json({ error: 'Invalid user credentials.' });
+      }
+      userIdAsObjectId = new ObjectId(decoded.userId);
+
       // Always force ObjectId for lookup on _id fields
       user = await usersCol.findOne({
-        _id: toObjectId(decoded.userId),
+        _id: userIdAsObjectId,
         email: decoded.email,
         tokens: { $elemMatch: { $eq: token } }
       });
       if (!user) {
         // Try again without email in query; maybe email was changed
         user = await usersCol.findOne({
-          _id: toObjectId(decoded.userId),
+          _id: userIdAsObjectId,
           tokens: { $elemMatch: { $eq: token } }
         });
         if (user && user.email !== decoded.email) {
@@ -92,7 +105,7 @@ export default async function authMiddleware(req, res, next) {
           token: token,
           decodedUserId: decoded?.userId,
           decodedEmail: decoded?.email,
-          userIdQuery: toObjectId(decoded.userId)
+          userIdQuery: userIdAsObjectId
         });
         await logDbEnvContext('REST AuthMiddleware Token Lookup Failure');
         return res.status(401).json({ error: 'User not found or token revoked.' });
@@ -117,5 +130,6 @@ export default async function authMiddleware(req, res, next) {
     res.status(500).json({ error: 'Internal server error (auth).' });
   }
 }
+
 
 

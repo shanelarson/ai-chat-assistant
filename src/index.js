@@ -90,6 +90,7 @@ const io = new SocketIOServer(server, {
 // Auth middleware for socket.io connections
 import { connectToMongo } from './functions/mongo.js';
 import jwt from 'jsonwebtoken';
+import { ObjectId } from 'mongodb';
 // Attach user object to socket after verifying JWT token
 io.use(async (socket, next) => {
   try {
@@ -120,16 +121,17 @@ io.use(async (socket, next) => {
     const db = await connectToMongo();
     const usersCol = db.collection('users');
     let _id;
-    try {
-      // Always use ObjectId for Mongo user lookups
-      if (db.bson && decoded.userId && typeof decoded.userId === 'string' && decoded.userId.length === 24) {
-        _id = new db.bson.ObjectId(decoded.userId);
-      } else {
-        _id = decoded.userId;
+    // Use mongodb ObjectId (not db.bson) for user lookup
+    if (typeof decoded.userId === 'string' && decoded.userId.length === 24) {
+      try {
+        _id = new ObjectId(decoded.userId);
+      } catch (e) {
+        console.error('[SOCKET AUTH] Invalid ObjectId string for userId:', decoded.userId, e);
+        return next(new Error('Malformed user id in token'));
       }
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('[SOCKET AUTH] Cannot parse userId:', decoded.userId, e);
+    } else {
+      // Defensive: refuse to look up with anything BUT valid ObjectId
+      console.error('[SOCKET AUTH] Non-ObjectId userId in token:', decoded.userId);
       return next(new Error('Malformed user id in token'));
     }
 
@@ -211,6 +213,7 @@ if (SOCKET_IO_PORT !== SERVER_PORT) {
     logDbEnvContext('Socket.IO Startup Context').then();
   });
 }
+
 
 
 
