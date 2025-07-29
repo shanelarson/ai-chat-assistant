@@ -427,6 +427,7 @@ function App() {
               }
               let userMsgContent;
               if (hasImages) {
+                // Always multimodal array for images (and possible text block)
                 userMsgContent = [
                   ...imagesToSend.map(img => ({
                     type: 'image_url',
@@ -434,7 +435,8 @@ function App() {
                   })),
                   ...(hasText ? [{ type: 'text', text: trimmedMsg }] : [])
                 ];
-              } else {
+              } else if (hasText) {
+                // For text-only messages, use the text string (not wrapped in an array)
                 userMsgContent = trimmedMsg;
               }
               const now = new Date();
@@ -623,6 +625,7 @@ export default App;
 
 
  
+
 
 
 

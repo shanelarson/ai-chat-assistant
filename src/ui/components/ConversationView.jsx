@@ -485,7 +485,6 @@ function MessageBubble({ type, content, streaming, label, pending }) {
           </span>
         )}
       </div>
-  // Note: The developer note about message merging/sorting is intentionally NOT displayed in UI. See source comments/app logic for details.
 
       <div style={bubbleStyle}>
         {renderedContent}
@@ -498,6 +497,15 @@ function MessageBubble({ type, content, streaming, label, pending }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
 
 
 
@@ -689,6 +697,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
