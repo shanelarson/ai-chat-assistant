@@ -148,13 +148,11 @@ export default async function handleMessage(socket, payload) {
     const prevMessages = Array.isArray(conversation.messages)
       ? conversation.messages
       : [];
-    // Build the user message: Always an object.
-    // Store images and text in a single user message (multimodal array) as per OpenAI format.
+    // Build the user message: always as an object, even for text-only
     let userMsgForDb;
     let openAIMsgContent;
     if (validatedImages.length > 0) {
-      // OpenAI expects an array of content blocks for multimodal.
-      // Push images (if any), followed by text (if present and non-empty).
+      // Multimodal: images and optional text
       let contentArray = [
         ...validatedImages.map(img => ({
           type: 'image_url',
@@ -171,15 +169,14 @@ export default async function handleMessage(socket, payload) {
         createdAt: new Date()
       };
     } else {
+      // For text-only: still wrap in object
       openAIMsgContent = message;
-      // Always store user messages as objects, even text-only!
       userMsgForDb = {
         type: 'user',
         content: message,
         createdAt: new Date()
       };
     }
-    // Always store user message as an object record in the DB; images and text are always together if both exist.
     await conversationsCol.updateOne(
       { _id: conversation._id },
       {
@@ -277,6 +274,4 @@ export default async function handleMessage(socket, payload) {
 // IMPORTANT: messages in the DB must always be of the form { type: 'user'|'assistant', content, createdAt }.
 // If user sends images, images and text are combined in a single 'user' message's content as an OpenAI multimodal array.
 // There are never standalone 'image' messages in the messages array.
-
-
 

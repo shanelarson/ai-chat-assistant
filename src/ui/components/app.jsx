@@ -425,20 +425,18 @@ function App() {
               if (sendLoading || streaming || convLoading) {
                 return;
               }
+              // ALWAYS create pending user messages as an object with .type, .content (which should always be either multimodal array or string if text-only), .createdAt
               let userMsgContent;
               if (hasImages) {
-                // Always multimodal array for images (and possible text block)
-                // For each image, ensure we send a data URL string (data:image/xxx;base64,...) in the 'data' property
                 userMsgContent = [
                   ...imagesToSend.map(img => ({
                     type: 'image_url',
-                    // Use 'img.dataUrl' if present, else fallback to 'img.data', else empty
                     image_url: { url: img.dataUrl || img.data || '' }
                   })),
                   ...(hasText ? [{ type: 'text', text: trimmedMsg }] : [])
                 ];
               } else if (hasText) {
-                // For text-only messages, use the text string (not wrapped in an array)
+                // For text-only messages, store as *string* not array
                 userMsgContent = trimmedMsg;
               }
               const now = new Date();
@@ -447,7 +445,6 @@ function App() {
                 content: userMsgContent,
                 createdAt: now,
                 pending: true,
-                // For new conversation, pendingUserMsg has no conversationId property
               };
               setPendingUserMsg(pendingMsgObj);
               if (!currentConv || !currentConv._id) {
@@ -522,7 +519,6 @@ function App() {
   // Remove the pending user message ONLY when a fully matching message is confirmed from backend (by content AND createdAt ~margin)
   useEffect(() => {
     if (!pendingUserMsg) return;
-    // Look for a backend-confirmed user message matching pending (content and createdAt within margin)
     if (
       currentConv &&
       currentConv.messages &&
@@ -627,20 +623,4 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
 

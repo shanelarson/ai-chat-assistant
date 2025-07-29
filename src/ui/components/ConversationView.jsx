@@ -64,43 +64,33 @@ export default function ConversationView({
     (!disabled && !loading && !streaming && !hasPendingImages) &&
     ((inputValue && inputValue.trim().length > 0) || validImageCount > 0);
   let messageInputError = error || imgError;
+  // Always trust backend for images: render from message content url directly (do not try to reconstruct or "reload" base64)
   let messages = conversation?.messages || [];
-  // Only show image preview (above input) before Send is pressed, and not if a message send is in progress
-  const showPendingImagePreview = (images.length > 0 && images.some(img => img.dataUrl && !img.error) && !loading && !streaming);
 
-  // For maximum message order stability, always sort the messages array by createdAt (and ObjectID time fallback), including any pending user message injected by parent.
-  // This ensures that messages always appear strictly in order User, Assistant, User, Assistant, even if backend or optimistic entries are slightly misordered.
-  function getCreatedAtOrFallback(msg) {
-    // Use createdAt if present, else try to derive from _id (MongoDB ObjectId)
-    if (msg.createdAt) {
-      return new Date(msg.createdAt).getTime();
+  // Sort all messages (pending, streaming, backend) by timestamp for maximum stability
+  function getMsgTimestamp(msg) {
+    if (msg.createdAt) return new Date(msg.createdAt).getTime();
+    if (msg._id && typeof msg._id === 'string' && msg._id.length === 24) {
+      return parseInt(msg._id.substring(0, 8), 16) * 1000;
     }
-    if (msg._id && typeof msg._id === "string" && msg._id.length === 24) {
-      // Mongo ObjectID encodes timestamp in first 8 chars = 4 bytes hex (seconds since epoch)
-      const tsHex = msg._id.substring(0,8);
-      return parseInt(tsHex, 16) * 1000;
-    }
-    // If all else fails, treat as very old
-    return 0;
+    return Date.now();
   }
-  // Defensive: only sort if array exists.
   const sortedMessages = useMemo(() => {
     if (!Array.isArray(messages) || messages.length === 0) return [];
-    // The injected pending user message from parent is included as a normal message (with .pending field if applicable), so just sort all.
-    // Do a stable sort by createdAt (and fallback)
     const arr = [...messages];
     arr.sort((a, b) => {
-      const atime = getCreatedAtOrFallback(a);
-      const btime = getCreatedAtOrFallback(b);
+      const atime = getMsgTimestamp(a);
+      const btime = getMsgTimestamp(b);
       if (atime !== btime) return atime - btime;
-      // If same timestamp, try to order by user before assistant
       if (a.type === 'user' && b.type === 'assistant') return -1;
       if (a.type === 'assistant' && b.type === 'user') return 1;
       return 0;
     });
     return arr;
-  // eslint-disable-next-line
   }, [messages && messages.length, JSON.stringify(messages)]);
+
+  // Only show image preview (above input) before Send is pressed, and not if a message send is in progress
+  const showPendingImagePreview = (images.length > 0 && images.some(img => img.dataUrl && !img.error) && !loading && !streaming);
 
   return (
     <section style={{
@@ -110,7 +100,6 @@ export default function ConversationView({
       minHeight: 0,
       background: '#fff'
     }}>
-      {/* Display conversation messages if existing, or contextual "start a new conversation" when new */}
       <div style={{
         flex: 1,
         overflowY: 'auto',
@@ -170,7 +159,6 @@ export default function ConversationView({
         )}
         <div ref={messagesEndRef} />
       </div>
-      {/* Always image upload + message input stack, regardless of new/existing */}
       <div style={{ borderTop: '1px solid #e3e6ea', background: '#fcfcfe', padding: '1em 1.2em 1em 1.3em' }}>
         <ImageUploadInput
           images={images}
@@ -181,9 +169,7 @@ export default function ConversationView({
         <MessageInput
           value={inputValue}
           onChange={onInputChange}
-          // Parent onSend handler (App) manages pendingUserMsg display and backend order, so just proxy
           onSend={() => {
-            // Combine images and text as a single user message; images as dataUrl base64s
             if (onSend) onSend(inputValue, images.filter(img => img.dataUrl && !img.error));
           }}
           loading={loading || streaming}
@@ -368,24 +354,9 @@ function MessageBubble({ type, content, streaming, label, pending }) {
             <div key={idx} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center'
             }}>
-              {/* Distinguish between base64 data URL and external URL for safety. */}
-              {img.url && typeof img.url === "string" && img.url.startsWith("data:image/") ? (
-                <img
-                  src={img.url}
-                  alt={img.description || `Attachment ${idx + 1}`}
-                  style={{
-                    maxWidth: 120,
-                    maxHeight: 78,
-                    borderRadius: 7,
-                    border: '1.4px solid #dde3f3',
-                    marginBottom: 2,
-                    background: '#f7f9ff',
-                    objectFit: 'contain'
-                  }}
-                />
-              ) : (
-                // If it's not a base64 image, render as external img or fallback (for future external img support)
-                img.url ? (
+              {/* Always render the image via the url property (base64 or external) */}
+              {img.url && typeof img.url === "string"
+                ? (
                   <img
                     src={img.url}
                     alt={img.description || `Attachment ${idx + 1}`}
@@ -395,14 +366,15 @@ function MessageBubble({ type, content, streaming, label, pending }) {
                       borderRadius: 7,
                       border: '1.4px solid #dde3f3',
                       marginBottom: 2,
-                      background: '#fafbfe',
+                      background: img.url.startsWith('data:image/') ? '#f7f9ff' : '#fafbfe',
                       objectFit: 'contain'
                     }}
                   />
-                ) : (
+                )
+                : (
                   <span style={{ color: '#c95f24', fontSize: 22 }}>Broken image</span>
                 )
-              )}
+              }
               {img.description && (
                 <div style={{
                   maxWidth: 110, color: '#818193', fontSize: 10, textAlign: 'center'
@@ -419,6 +391,15 @@ function MessageBubble({ type, content, streaming, label, pending }) {
       <ChatMarkdownContent isUser={isUser} type={type} text={typeof content === 'string' ? content : String(content ?? '')} />
     );
   }
+
+
+
+
+
+
+
+
+
   return (
     <div
       style={{
@@ -696,6 +677,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
