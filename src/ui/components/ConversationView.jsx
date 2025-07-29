@@ -296,7 +296,11 @@ function MessageBubble({ type, content, streaming, label }) {
               <a {...props} target="_blank" rel="noopener noreferrer">{props.children}</a>
             ),
             code({ node, inline, className, children, ...props }) {
-              const lang = getLanguage(className);
+              let lang = getLanguage(className);
+              // If language not specified or blank, use javascript as default for block code
+              if (!inline && (!lang || lang.trim() === "")) {
+                lang = "javascript";
+              }
               const isSupported = SUPPORTED_LANGS.includes(lang);
               if (!inline && isSupported) {
                 const codeString = Array.isArray(children) ? children.join('') : String(children);
@@ -479,6 +483,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
