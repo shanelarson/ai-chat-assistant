@@ -374,9 +374,7 @@ function App() {
                 ? {
                     ...currentConv,
                     messages: (() => {
-                      // Start with backend messages
                       let msgs = Array.isArray(currentConv.messages) ? [...currentConv.messages] : [];
-                      // If we have a pending user message for this conv, and it hasn't already been echoed by backend:
                       let showPending = false;
                       if (
                         pendingUserMsg &&
@@ -410,8 +408,7 @@ function App() {
                       return msgs;
                     })()
                   }
-                : // If there's a pending user message and no conversation exists (start new conversation screen after sending the first message)
-                  (pendingUserMsg
+                : (pendingUserMsg
                     ? {
                         messages: [pendingUserMsg]
                       }
@@ -433,7 +430,6 @@ function App() {
               if (sendLoading || streaming || convLoading) {
                 return;
               }
-              // ALWAYS create pending user messages as an object with .type, .content (which should always be either multimodal array or string if text-only), .createdAt
               let userMsgContent;
               if (hasImages) {
                 userMsgContent = [
@@ -444,7 +440,6 @@ function App() {
                   ...(hasText ? [{ type: 'text', text: trimmedMsg }] : [])
                 ];
               } else if (hasText) {
-                // For text-only messages, store as *string* not array
                 userMsgContent = trimmedMsg;
               }
               const now = new Date();
@@ -456,7 +451,6 @@ function App() {
               };
               setPendingUserMsg(pendingMsgObj);
               if (!currentConv || !currentConv._id) {
-                // Starting a new conversation: create on backend, use its _id, then send message.
                 setSendLoading(true);
                 setChatError('');
                 setStreaming(false);
@@ -467,7 +461,6 @@ function App() {
                   });
                   const newConv = await res.json();
                   if (newConv && newConv._id) {
-                    // Instead of just prepending the empty conv, always reload full list from backend to avoid message drop
                     apiFetch('/conversations')
                       .then(res2 => res2.json())
                       .then(data => {
@@ -478,7 +471,6 @@ function App() {
                           setCurrentConv(convObj || newConv);
                         }
                       });
-                    // Now send the first message in this conversation
                     setSendLoading(true);
                     setStreaming(true);
                     socket.emit('message', {
@@ -504,7 +496,6 @@ function App() {
                 }
                 return;
               }
-              // Existing conversation: send as normal
               setSendLoading(true);
               setChatError('');
               setStreaming(true);
@@ -660,6 +651,7 @@ function App() {
 // If stream starts/ends normally, the input is already cleared.
 export { }
 export default App;
+
 
 
 

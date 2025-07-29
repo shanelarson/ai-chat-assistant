@@ -24,6 +24,7 @@ import ImageUploadInput from './ImageUploadInput.jsx';
  * IMAGE STATE is managed locally in this component (full control).
  */
 // Expose the file input ref reset to parent for proper clearing after send
+
 export default function ConversationView({
   conversation,
   loading,
@@ -34,29 +35,14 @@ export default function ConversationView({
   disabled,
   placeholder,
   error,
-  // Added for file input ref reset
-  onFileInputRef
+  images,
+  onImagesChange,
+  // Optionally: handle file input ref forwarding/reset if still needed
+  imageInputRef,
+  imageResetSignal,
 }) {
   const messagesEndRef = useRef(null);
-  // --- Images state for send box ---
-  const [images, setImages] = useState([]);
   const [imgError, setImgError] = useState('');
-  // Ref to access the file input in ImageUploadInput for reset requests
-  const imageInputRef = useRef();
-  // Expose method to parent for clearing images and input UI
-  React.useImperativeHandle(onFileInputRef, () => ({
-    clearImages: () => {
-      setImages([]);
-      if (imageInputRef.current) imageInputRef.current.value = '';
-    }
-  }), []);
-
-  useEffect(() => {
-    if (onFileInputRef) {
-      // Provide to parent so it can call .current.reset() after send
-      onFileInputRef(imageInputRef);
-    }
-  }, [onFileInputRef]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -64,14 +50,13 @@ export default function ConversationView({
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [conversation, streaming, inputValue]);
+
   // Handler for image attachment change (reset imgError on change)
   function handleImageChange(newImages) {
-    setImages(newImages);
+    if (onImagesChange) onImagesChange(newImages);
     setImgError('');
   }
-  // Omit separate image and text message logic: unified into one user message per send
-  const hasPendingImages = Array.isArray(images) && images.some(img => (!img.dataUrl && !img.error) || img.error);
-  const validImageCount = images.filter(img => img.dataUrl && !img.error).length;
+
   let messageInputError = error || imgError;
   let messages = conversation?.messages || [];
   function getMsgTimestamp(msg) {
@@ -94,7 +79,6 @@ export default function ConversationView({
     });
     return arr;
   }, [messages && messages.length, JSON.stringify(messages)]);
-  const showPendingImagePreview = (images.length > 0 && images.some(img => img.dataUrl && !img.error) && !loading && !streaming);
   return (
     <section style={{
       flex: 1,
@@ -167,13 +151,14 @@ export default function ConversationView({
           onChange={handleImageChange}
           loading={loading || streaming || disabled}
           error={imgError}
-          inputRefForward={imageInputRef}
+          inputResetSignal={imageResetSignal}
+          ref={imageInputRef}
         />
         <MessageInput
           value={inputValue}
           onChange={onInputChange}
           onSend={() => {
-            if (onSend) onSend(inputValue, images.filter(img => img.dataUrl && !img.error));
+            if (onSend) onSend(inputValue, images ? images.filter(img => img.dataUrl && !img.error) : []);
           }}
           loading={loading || streaming}
           disabled={false}
@@ -785,6 +770,7 @@ function MessageInput({
 // Export an imperative handle for the parent to clear images and file input
 // (see useImperativeHandle in function above)
  ConversationView.displayName = 'ConversationView';
+
 
 
 

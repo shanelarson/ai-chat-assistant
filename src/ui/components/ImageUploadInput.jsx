@@ -36,7 +36,6 @@ export default function ImageUploadInput({
   ];
   const MAX_SIZE_MB = 20;
   const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
-
   // Handle file selection from input/button
   function handleFiles(files) {
     if (!files) return;
@@ -140,7 +139,6 @@ export default function ImageUploadInput({
       );
     }
   }
-
   // Drag-and-drop logic
   function handleDrop(e) {
     e.preventDefault();
@@ -158,7 +156,6 @@ export default function ImageUploadInput({
     newArr.splice(idx, 1);
     onChange(newArr);
   }
-
   function openFilePicker() {
     if (loading) return;
     if (inputRef.current) inputRef.current.value = ''; // Reset to allow re-selecting same files
@@ -349,3 +346,4 @@ ImageUploadInput.propTypes = {
   resetKey: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
 };
 */
+
