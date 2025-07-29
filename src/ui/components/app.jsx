@@ -311,6 +311,8 @@ function App() {
   }
   // Ref to allow clearing the file input in ImageUploadInput after send
   const imageInputRef = useRef();
+  // Reset signal for image upload input field/component (will increase to force ImageUploadInput to reset file input)
+  const [imageResetSignal, setImageResetSignal] = useState(0);
   // Show main UI
   function renderMainContent() {
     if (!loggedIn) {
@@ -524,6 +526,7 @@ function App() {
             images={images}
             onImagesChange={setImages}
             imageInputRef={imageInputRef}
+            imageResetSignal={imageResetSignal}
           />
         </div>
       </div>
@@ -552,10 +555,12 @@ function App() {
       if (found) {
         setPendingUserMsg(null);
         setImages([]);
-        // Reset file input so attached files are cleared too
+        setInputValue(''); // Also clear the text input
+        // Reset file input so attached files are cleared too, and propagate fresh reset signal to ImageUploadInput
         if (imageInputRef.current) {
           imageInputRef.current.value = '';
         }
+        setImageResetSignal(sig => sig + 1);
         imagesCleared = true;
       }
     }
@@ -568,9 +573,11 @@ function App() {
     ) {
       setPendingUserMsg(null);
       setImages([]); // Clear images when switching conversations
+      setInputValue(''); // Also clear text field when switching conversations
       if (imageInputRef.current) {
         imageInputRef.current.value = '';
       }
+      setImageResetSignal(sig => sig + 1);
     }
   }, [currentConv && currentConv.messages && currentConv.messages.length, currentConv && currentConv._id, pendingUserMsg]);
   // Helpers for stable message ordering and deep content comparison
@@ -651,9 +658,8 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export { }
-
-
 export default App;
+
 
 
 

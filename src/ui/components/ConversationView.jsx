@@ -43,6 +43,13 @@ export default function ConversationView({
   const [imgError, setImgError] = useState('');
   // Ref to access the file input in ImageUploadInput for reset requests
   const imageInputRef = useRef();
+  // Expose method to parent for clearing images and input UI
+  React.useImperativeHandle(onFileInputRef, () => ({
+    clearImages: () => {
+      setImages([]);
+      if (imageInputRef.current) imageInputRef.current.value = '';
+    }
+  }), []);
 
   useEffect(() => {
     if (onFileInputRef) {
@@ -663,7 +670,6 @@ function ChatMarkdownContent({ isUser, type, text }) {
   }
   return renderedContent;
 }
-
 // NOTE: This component and all content rendering must defensively guard against object-as-child.
 // All mapping over normalizedContent (and markdown code blocks) must never create object children.
 // Only recognized strings, numbers, or elements are rendered; all others trigger a placeholder warning.
@@ -775,6 +781,12 @@ function MessageInput({
     </form>
   );
 }
+
+// Export an imperative handle for the parent to clear images and file input
+// (see useImperativeHandle in function above)
+ ConversationView.displayName = 'ConversationView';
+
+
 
 
 

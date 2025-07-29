@@ -22,6 +22,7 @@ export default function ImageUploadInput({
   style = {},
   error = '',
   inputResetSignal = 0,
+  resetKey // when changed, clear internal images state & file input
 }) {
   const inputRef = useRef();
 
@@ -163,12 +164,10 @@ export default function ImageUploadInput({
     if (inputRef.current) inputRef.current.value = ''; // Reset to allow re-selecting same files
     inputRef.current && inputRef.current.click();
   }
-
-  // Effect to reset input file element when parent requests (inputResetSignal changes)
+  // Effect to reset input file element when parent requests (inputResetSignal or resetKey changes)
   React.useEffect(() => {
     if (inputRef.current) inputRef.current.value = '';
-  }, [inputResetSignal]);
-
+  }, [inputResetSignal, resetKey]);
   // UI
   return (
     <div style={{ ...style, marginBottom: 8 }}>
@@ -347,5 +346,6 @@ ImageUploadInput.propTypes = {
   style: PropTypes.object,
   error: PropTypes.string,
   inputResetSignal: PropTypes.number,
+  resetKey: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
 };
 */

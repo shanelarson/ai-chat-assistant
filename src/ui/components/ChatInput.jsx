@@ -21,42 +21,35 @@ export default function ChatInput({
   loading,
   disabled,
   placeholder,
-  error
+  error,
+  resetKey = 0
 }) {
-  const fileInputResetRef = useRef(0);
   const internalInputRef = useRef();
-  const [localResetKey, setLocalResetKey] = useState(0);
 
   function handleKeyDown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       if (typeof onSend === 'function' && !loading && !disabled && value.trim()) {
         onSend();
-        // After a successful send, reset the file input (see below)
-        setLocalResetKey(k => k + 1);
       }
     }
   }
 
-  // Floating "Send" function
   function handleSendWrapper(e) {
     e.preventDefault();
     if (!loading && !disabled && value && value.trim()) {
       if (typeof onSend === 'function') {
         onSend();
-        setLocalResetKey(k => k + 1);
       }
     }
   }
 
-  // Reset file input in ImageUploadInput when localResetKey changes
-  function handleFileInputRef(fileInput) {
-    // No-op for compability, but you could expose ref here
-    internalInputRef.current = fileInput;
-    if (fileInput && fileInput.value) {
-      fileInput.value = '';
+  // If parent resets images/input after a successful send, use resetKey to force file input clear
+  React.useEffect(() => {
+    if (internalInputRef.current) {
+      internalInputRef.current.value = '';
     }
-  }
+  }, [resetKey]);
 
   return (
     <form
@@ -73,7 +66,8 @@ export default function ChatInput({
         onChange={onImagesChange}
         loading={loading || disabled}
         error={error}
-        resetKey={localResetKey}
+        inputRefForward={internalInputRef}
+        inputResetSignal={resetKey}
       />
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <textarea
