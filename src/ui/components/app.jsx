@@ -134,7 +134,8 @@ function App() {
     import('socket.io-client').then(({ io }) => {
       sock = io(SOCKET_URL, {
         autoConnect: false,
-        auth: { token }
+        auth: { token },
+        transports: ["websocket"],
       });
       sock.connect();
 
@@ -226,7 +227,6 @@ function App() {
       });
 
       setSocket(sock);
-
       // Cleanup
       return () => {
         if (sock) sock.disconnect();

@@ -66,7 +66,8 @@ const io = new SocketIOServer(server, {
     credentials: true,
     methods: ["GET", "POST"],
     allowedHeaders: ["Authorization", "Content-Type"],
-  }
+  },
+  transports: ["websocket"]
 });
 
 // ---- Socket.io Auth + Events ----
@@ -124,6 +125,7 @@ io.listen(SOCKET_IO_PORT, () => {
   console.log(`[Socket.io] Real-time server listening on port ${SOCKET_IO_PORT}`);
   console.log(`[Socket.io CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
 });
+
 
 
 
