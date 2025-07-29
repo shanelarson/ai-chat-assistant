@@ -8,7 +8,8 @@ function getOpenAIClient() {
   const baseURL = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1';
   return new OpenAI({ apiKey, baseURL });
 }
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4-vision-preview';
+// Default to gpt-4.1, which supports vision (images)
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1';
 
 // Supported image types for validation
 const SUPPORTED_IMAGE_TYPES = [
@@ -32,7 +33,27 @@ export default async function handleMessage(socket, payload) {
     }
     // Validate images input if present
     let validatedImages = [];
+    // List of supported OpenAI multimodal models (update as new versions become available!)
+    const MULTIMODAL_MODELS = [
+      'gpt-4-vision-preview',  // included for strict completeness, but deprecated and should discourage
+      'gpt-4.1',               // main production model for images as of June 2024
+    ];
+    // If a model is set that does NOT support images, and images are attached, error out
+    const modelSupportsImages =
+      MULTIMODAL_MODELS.includes(String(OPENAI_MODEL)) ||
+      (String(OPENAI_MODEL).startsWith('gpt-4-vision') || String(OPENAI_MODEL).startsWith('gpt-4.1'));
+
     if (Array.isArray(images) && images.length > 0) {
+      if (!modelSupportsImages) {
+        socket.emit('errorMessage', {
+          error:
+            `Image attachment is not supported with the selected OpenAI model (${OPENAI_MODEL}). ` +
+            `Set OPENAI_MODEL to "gpt-4.1" or another image-capable model.`
+        });
+        // eslint-disable-next-line no-console
+        console.log(`[IMG VALIDATION] User ${user._id}: tried to send images but model ${OPENAI_MODEL} does not support vision.`);
+        return;
+      }
       if (images.length > MAX_IMAGES) {
         socket.emit('errorMessage', {
           error: `You can attach up to ${MAX_IMAGES} images per message.`
@@ -78,7 +99,6 @@ export default async function handleMessage(socket, payload) {
           url: img.data, // should be full data URL (already data:image/xxx;base64,...)
           type: img.type,
           name: img.name || `image${i + 1}`,
-          // could include description/caption if frontend supports it
         });
       }
     }
@@ -137,8 +157,7 @@ export default async function handleMessage(socket, payload) {
     };
     let openAIMsgContent;
     if (validatedImages.length > 0) {
-      // OpenAI expects an array of content blocks
-      // Optionally prepend a vision preamble ("Analyze these images and answer: ...")
+      // OpenAI expects an array of content blocks for multimodal
       openAIMsgContent = [
         ...validatedImages.map(img => ({
           type: 'image_url',
@@ -172,12 +191,11 @@ export default async function handleMessage(socket, payload) {
         $set: { updatedAt: new Date() }
       }
     );
-
     // Set up request to OpenAI API (stream enabled)
     const openai = getOpenAIClient();
 
     // Assemble OpenAI messages history, but convert only the *latest* user message into multimodal syntax
-    // All previous messages are plain text.
+    // All previous messages are plain text or array as received.
     const openAIMessages =
       prevMessages.map(msg => ({
         role: msg.type === 'user' ? 'user' : 'assistant',
@@ -223,10 +241,31 @@ export default async function handleMessage(socket, payload) {
     } catch (streamErr) {
       // eslint-disable-next-line no-console
       console.error('Error during streaming OpenAI completion:', streamErr);
-      socket.emit('errorMessage', {
-        error: 'Could not connect to OpenAI or stream response. Please try again. ' +
-          (streamErr?.message ? `Upstream error: ${streamErr.message}` : '')
-      });
+      // Detect and handle model deprecation/vision error more user-friendly
+      let upstreamMsg =
+        streamErr && typeof streamErr.message === 'string'
+          ? streamErr.message
+          : '';
+      if (
+        /gpt-4-vision-preview(.+)deprecated/i.test(upstreamMsg) ||
+        /model .* deprecated/i.test(upstreamMsg)
+      ) {
+        socket.emit('errorMessage', {
+          error: 'Image support is temporarily unavailable due to a provider update (vision model deprecated). ' +
+            'Please switch to "gpt-4.1" or another supported model in your settings. ' +
+            (upstreamMsg ? `Error: ${upstreamMsg}` : '')
+        });
+      } else if (/This model .* does not support image|Operation is not supported/i.test(upstreamMsg)) {
+        socket.emit('errorMessage', {
+          error: 'The currently selected OpenAI model does not support image input. ' +
+            'Please use "gpt-4.1" or another supported multimodal model.'
+        });
+      } else {
+        socket.emit('errorMessage', {
+          error: 'Could not connect to OpenAI or stream response. Please try again. ' +
+            (streamErr?.message ? `Upstream error: ${streamErr.message}` : '')
+        });
+      }
     }
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -237,4 +276,6 @@ export default async function handleMessage(socket, payload) {
 // Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
 // Event names must match between frontend and backend (see app.jsx and here).
 // See documentation for configuration of environment variables for CORS and ports.
+
+
 
