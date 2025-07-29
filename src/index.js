@@ -115,16 +115,24 @@ io.on('connection', (socket) => {
 });
 
 // ---- Start Servers ----
+
+// Listen HTTP API server
 server.listen(SERVER_PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`[Express] API + Static server listening on port ${SERVER_PORT}`);
   console.log(`[CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
 });
-io.listen(SOCKET_IO_PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`[Socket.io] Real-time server listening on port ${SOCKET_IO_PORT}`);
-  console.log(`[Socket.io CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
-});
+
+// Start Socket.IO server on separate port if required
+if (SOCKET_IO_PORT !== SERVER_PORT) {
+  io.listen(SOCKET_IO_PORT, () => {
+    // eslint-disable-next-line no-console
+    console.log(`[Socket.io] Real-time server listening on port ${SOCKET_IO_PORT}`);
+    console.log(`[Socket.io CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
+  });
+}
+
+
 
 
 

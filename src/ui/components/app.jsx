@@ -4,7 +4,7 @@ import LoginModal from './LoginModal.jsx';
 import SignupModal from './SignupModal.jsx';
 import ConversationList from './ConversationList.jsx';
 import ConversationView from './ConversationView.jsx';
-// Endpoints/Socket URLs from env
+// Endpoints/Socket URLs from env (.env/.env.example control these, see docs)
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'ws://localhost:4000';
 function App() {
@@ -87,7 +87,6 @@ function App() {
       setLoginLoading(false);
     }
   }
-
   async function handleSignup({ email, password }) {
     setSignupLoading(true);
     setSignupError('');
@@ -145,14 +144,12 @@ function App() {
           handleLogout();
         }
       });
-
       // Error message from server
       sock.on('errorMessage', msg => {
         setChatError(msg?.error || 'A server error occurred.');
         setStreaming(false);
         setSendLoading(false);
       });
-
       // Handle rejected messages (due to active awaiting response)
       sock.on('messageRejected', ({ reason, message: rejectedMessage }) => {
         setChatError(reason || 'Message rejected.');
@@ -162,7 +159,6 @@ function App() {
         setStreaming(false);
         setSendLoading(false);
       });
-
       // Handle streaming chunks
       sock.on('messageStreamChunk', ({ conversationId, chunk }) => {
         setConversations(prevConvs =>
@@ -384,7 +380,6 @@ function App() {
       </div>
     );
   }
-
   // -------- Main App Render ---------
   return (
     <>
@@ -418,7 +413,9 @@ function App() {
     </>
   );
 }
+// Note: To configure API/SOCKET URLs and ports, use .env/.env.example. CORS policies must match both HTTP and Socket.IO servers.
 // On successful message send and stream start (first chunk or streamEnd), clear inputValue (unless message was rejected)
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
-// If stream starts/ends normally, the input is already cleared, as designed.
+// If stream starts/ends normally, the input is already cleared.
 export default App;
+

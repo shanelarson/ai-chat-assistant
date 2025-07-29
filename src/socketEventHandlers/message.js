@@ -8,10 +8,14 @@ function getOpenAIClient() {
   return new OpenAI({ apiKey, baseURL });
 }
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
-
-// Message event handler for socket.io
+// Message event handler for Socket.IO server
 // Expects: { conversationId, message }
-// Emits: 'messageStreamChunk' { conversationId, chunk } as chunks stream in, and 'messageStreamEnd'
+// Emits: 
+//   - 'messageStreamChunk' { conversationId, chunk } as message streams in
+//   - 'messageStreamEnd' { conversationId } when done
+//   - 'errorMessage' { error } on error
+//   - 'messageRejected' { error, rejectedMessage, conversationId } if user sends another message before assistant reply
+
 export default async function handleMessage(socket, payload) {
   try {
     const { conversationId, message } = payload || {};
@@ -90,7 +94,6 @@ export default async function handleMessage(socket, payload) {
       messages: openAIMessages,
       stream: true
     };
-
     // OpenAI streaming using response.data as a readable stream
     const response = await openai.createChatCompletion(completionOpts, { responseType: 'stream' });
     let assistantMsg = '';
@@ -152,4 +155,8 @@ export default async function handleMessage(socket, payload) {
     socket.emit('errorMessage', { error: 'Internal server error.' });
   }
 }
+
+// Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
+// Event names must match between frontend and backend (see app.jsx and here).
+// See documentation for configuration of environment variables for CORS and ports.
 

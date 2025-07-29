@@ -2,11 +2,12 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { connectToMongo } from '../functions/mongo.js';
 
+// Config values from environment variables (see .env.example for reference)
 const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '1d';
 
-// Express handler for user login
+// Express handler for user login at /login (see src/index.js)
 export default async function loginHandler(req, res) {
   try {
     const { email, password } = req.body || {};
@@ -35,11 +36,11 @@ export default async function loginHandler(req, res) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    // Generate JWT token
+    // Generate JWT token with user ID and email -- exp controlled by env var
     const tokenPayload = { userId: userDoc._id.toString(), email: userDoc.email };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
 
-    // Store token on user document (push to tokens array)
+    // Store token on user document (push to tokens array for session revocation)
     await usersCol.updateOne(
       { _id: userDoc._id },
       { $push: { tokens: token } }

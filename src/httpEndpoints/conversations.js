@@ -4,7 +4,7 @@ import express from 'express';
 
 const router = express.Router();
 
-// GET /api/conversations - Get all conversations for the authenticated user
+// GET / - Get all conversations for the authenticated user
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToMongo();
@@ -32,7 +32,7 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/conversations - Start a new conversation for user (empty)
+// POST / - Start a new conversation for user (empty)
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToMongo();

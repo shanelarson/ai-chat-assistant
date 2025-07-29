@@ -91,7 +91,11 @@ export default {
         target: API_URL,
         changeOrigin: true,
         secure: false,
-        // pathRewrite: { '^/api': '' }
+        // pathRewrite: { '^/api': '' },
+        // Explicitly set headers to support CORS in dev for API calls across localhost:1234 <-> :3000
+        onProxyReq: (proxyReq, req, res) => {
+          proxyReq.setHeader('origin', API_URL);
+        },
       }
     },
     client: {
@@ -104,3 +108,11 @@ export default {
     }
   }
 };
+// ---------------------
+// NOTE ON API/SOCKET CONFIG
+// This webpack config ensures that:
+// - All API requests from the React frontend (dev server, port 1234) proxy to the API server on API_URL (default http://localhost:3000) with the '/api' prefix.
+// - The Socket.IO URL for real-time streaming is set via REACT_APP_SOCKET_URL (default ws://localhost:4000).
+// - CORS must be configured on the backend (.env.example: CORS_ORIGIN) to allow both http://localhost:1234 and http://localhost:3000 in development.
+// - If ports or hosts change, update your .env file and restart both servers.
+// ---------------------
