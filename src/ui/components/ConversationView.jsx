@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import 'github-markdown-css/github-markdown-light.css';
+import CodeBlock from './CodeBlock';
 
 /**
  * ConversationView
@@ -236,8 +237,24 @@ function MessageBubble({ type, content, streaming, label }) {
             a: ({ node, ...props }) => (
               <a {...props} target="_blank" rel="noopener noreferrer">{props.children}</a>
             ),
-            // Improve code block styling for GH markdown
             code({node, inline, className, children, ...props}) {
+              // Only render with CodeBlock for block-level and supported languages
+              // Supported: jsx, javascript, typescript
+              const matchBlock = !inline && className && (
+                /language-jsx|language-javascript|language-typescript/.test(className)
+              );
+              if (!inline && matchBlock) {
+                // join children in case react-markdown passes as array
+                const codeString = Array.isArray(children) ? children.join('') : String(children);
+                // Pick language
+                let lang = '';
+                if (className) {
+                  const m = className.match(/language-([\w-]+)/);
+                  if (m && m[1]) lang = m[1];
+                }
+                return <CodeBlock value={codeString} language={lang} className={className} />;
+              }
+              // For inline or other code, keep original
               return (
                 <code className={className} style={{
                   background: "#f6f8fa",
@@ -245,7 +262,6 @@ function MessageBubble({ type, content, streaming, label }) {
                   padding: inline ? "2px 4px" : "0.6em 1em",
                   fontSize: 14,
                   fontFamily: "Consolas, Fira Mono, monospace",
-                  // For block code, ensure break
                   display: inline ? "inline" : "block",
                   wordBreak: "break-word",
                   overflowX: "auto"
@@ -257,6 +273,10 @@ function MessageBubble({ type, content, streaming, label }) {
           }}
         />
       </div>
+
+
+
+
     );
   } catch (err) {
     // Fallback: render safe pre block
@@ -409,5 +429,6 @@ function MessageInput({
     </form>
   );
 }
+
 
 
