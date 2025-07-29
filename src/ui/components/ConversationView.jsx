@@ -3,11 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import 'github-markdown-css/github-markdown-light.css';
-import CodeBlock from './CodeBlock';
-
-// Import SUPPORTED_LANGS and getLanguage for consistent language detection
-import { SUPPORTED_LANGS } from './CodeBlock';
-import { getLanguage } from './CodeBlock';
+import CodeBlock, { SUPPORTED_LANGS, getLanguage } from './CodeBlock';
 
 /**
  * ConversationView
@@ -425,6 +421,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 

@@ -12,15 +12,14 @@ SyntaxHighlighter.registerLanguage('js', js);
 SyntaxHighlighter.registerLanguage('typescript', ts);
 SyntaxHighlighter.registerLanguage('ts', ts);
 SyntaxHighlighter.registerLanguage('jsx', jsx);
-
 // Utility to clean up language string
-function getLanguage(className) {
+export function getLanguage(className) {
   if (!className) return '';
   const match = className.match(/language-([\w-]+)/i);
   return match ? match[1].toLowerCase() : '';
 }
 
-const SUPPORTED_LANGS = ['jsx', 'javascript', 'js', 'typescript', 'ts'];
+export const SUPPORTED_LANGS = ['jsx', 'javascript', 'js', 'typescript', 'ts'];
 
 export default function CodeBlock({ value, language: languageProp, className }) {
   const language = languageProp || getLanguage(className) || '';
@@ -180,6 +179,7 @@ CodeBlock.propTypes = {
   language: PropTypes.string,
   className: PropTypes.string,
 };
+
 
 
 
