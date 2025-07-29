@@ -62,7 +62,10 @@ const server = http.createServer(app);
 // ---- Setup Socket.io server ----
 const io = new SocketIOServer(server, {
   cors: {
-    origin: CORS_ORIGIN
+    origin: CORS_ORIGIN,
+    credentials: true,
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Authorization", "Content-Type"],
   }
 });
 
@@ -119,7 +122,9 @@ server.listen(SERVER_PORT, () => {
 io.listen(SOCKET_IO_PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`[Socket.io] Real-time server listening on port ${SOCKET_IO_PORT}`);
+  console.log(`[Socket.io CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
 });
+
 
 
 
