@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import js from 'react-syntax-highlighter/dist/esm/languages/hljs/javascript';
 import ts from 'react-syntax-highlighter/dist/esm/languages/hljs/typescript';
-import jsx from 'react-syntax-highlighter/dist/esm/languages/hljs/javascript';
+import jsx from 'react-syntax-highlighter/dist/esm/languages/hljs/jsx';
 import { github } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 // Register languages only as needed for bundle size
@@ -175,7 +175,6 @@ export default function CodeBlock({ value, language: languageProp, className }) 
     );
   }
 }
-
 CodeBlock.propTypes = {
   value: PropTypes.string.isRequired,
   language: PropTypes.string,
