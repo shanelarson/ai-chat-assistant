@@ -191,6 +191,7 @@ export default function ConversationView({
  *   This ensures the code highlighter and markdown parser receive fully-formed code blocks when the message is finalized.
  * - For finalized messages (not streaming), use markdown parsing and syntax highlighting for code blocks.
  */
+
 function MessageBubble({ type, content, streaming, label, pending }) {
   const isUser = type === 'user';
   const bubbleStyle = {
@@ -208,10 +209,8 @@ function MessageBubble({ type, content, streaming, label, pending }) {
     whiteSpace: 'pre-line'
   };
 
-  // Pending (optimistic) messages may be styled slightly distinct (opacity, italic), but for now same appearance.
-
-  // ---- DEFENSIVE PATCH for: If content is a plain object with {type: ...} and e.g. {type:'image_url', image_url:{...}},
-  // wrap it in an array to handle OpenAI multimodal single-part format or accidental non-array
+  // Defensive patch: pending user messages with images (for brand new conversations) might pass a single object instead of array.
+  // If content is a plain object with {type: ...}, wrap it in array.
   let normalizedContent = content;
   if (
     content &&
@@ -219,7 +218,6 @@ function MessageBubble({ type, content, streaming, label, pending }) {
     !Array.isArray(content) &&
     // Not legacy {images:..., text:...}
     !(content.images && Array.isArray(content.images)) &&
-    // Probably a single-part OpenAI message: {type:..., ...}
     (
       (content.type === 'image_url' && content.image_url && typeof content.image_url === 'object') ||
       (content.type === 'text' && typeof content.text === 'string')
@@ -342,7 +340,6 @@ function MessageBubble({ type, content, streaming, label, pending }) {
   let renderedContent;
   // Defensive multimodal rendering for OpenAI-style array content: [{type:..., ...}]
   if (Array.isArray(normalizedContent)) {
-    // Defensive: Only render actual objects, don't pass objects as children.
     renderedContent = (
       <div>
         {normalizedContent.map((part, idx) => {
@@ -373,7 +370,6 @@ function MessageBubble({ type, content, streaming, label, pending }) {
               </div>
             );
           } else if (part && typeof part === 'object' && part.type === 'text' && typeof part.text === 'string') {
-            // Render as markdown
             return (
               <ChatMarkdownContent
                 key={`text-${idx}`}
@@ -385,15 +381,12 @@ function MessageBubble({ type, content, streaming, label, pending }) {
           } else if (typeof part === 'string') {
             return <span key={`text-string-${idx}`}>{part}</span>;
           } else {
-            // Defensive fallback: render as a string or skip
-            // Will produce [object Object] if you reach here, so prefer null
             return null;
           }
         })}
       </div>
     );
   } else if (normalizedContent && typeof normalizedContent === 'object' && normalizedContent.images && Array.isArray(normalizedContent.images)) {
-    // Legacy support: { images: [...], text: ... }
     const multimodalImages = normalizedContent.images.map(img => ({
       url: img.url,
       detail: img.detail,
@@ -439,19 +432,10 @@ function MessageBubble({ type, content, streaming, label, pending }) {
       </div>
     );
   } else {
-    // Plain text or other fallback types
     renderedContent = (
       <ChatMarkdownContent isUser={isUser} type={type} text={typeof normalizedContent === 'string' ? normalizedContent : String(normalizedContent ?? '')} />
     );
   }
-
-
-
-
-
-
-
-
 
   return (
     <div
@@ -511,25 +495,23 @@ function MessageBubble({ type, content, streaming, label, pending }) {
       <div style={bubbleStyle}>
         {renderedContent}
       </div>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -730,6 +712,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
