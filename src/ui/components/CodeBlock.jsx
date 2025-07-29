@@ -132,7 +132,6 @@ export default function CodeBlock({ value, language: languageProp, className }) 
             }}
             showLineNumbers={false}
             PreTag="div"
-            ref={codeRef}
           >
             {code}
           </SyntaxHighlighter>
