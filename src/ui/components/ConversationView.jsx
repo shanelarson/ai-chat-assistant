@@ -54,9 +54,9 @@ export default function ConversationView({
     setImages(newImages);
     setImgError('');
   }
-  // -- PATCH: To insert user message (optimistic) before backend response --
+  // --- PATCH: To insert user message (optimistic) before backend response --
   const [pendingUserMessage, setPendingUserMessage] = useState(null);
-  // Custom onSend with images
+  // Custom onSend with images (unified: user message always contains images and/or text as OpenAI multimodal array)
   async function handleSendWithImages() {
     if (loading || streaming || disabled) return;
     let firstError = null;
@@ -85,7 +85,6 @@ export default function ConversationView({
       return;
     }
     setImgError('');
-    // Pass both text and image data array
     const imagePayload = images
       .filter(img => img.dataUrl && !img.error)
       .map(img => ({
@@ -94,45 +93,47 @@ export default function ConversationView({
         name: img.file?.name || '',
         size: img.file?.size || undefined
       }));
-    // Optimistically insert the pending user message in the UI before backend response
-    let newMsg;
+    let contentArr = [];
     if (imagePayload.length > 0) {
-      // OpenAI multimodal array: images then text
-      const contentArr = [
+      contentArr = [
         ...imagePayload.map(img => ({
           type: 'image_url',
           image_url: { url: img.data }
-        })),
-        { type: 'text', text: inputValue }
+        }))
       ];
+    }
+    if (inputValue && inputValue.trim().length > 0) {
+      contentArr.push({ type: 'text', text: inputValue });
+    }
+    let newMsg;
+    // Always create a single 'user' message with content as OpenAI multimodal array or string (if text-only)
+    if (contentArr.length > 0) {
       newMsg = {
         type: 'user',
         content: contentArr,
         createdAt: new Date()
       };
     } else {
-      newMsg = { type: 'user', content: inputValue, createdAt: new Date() };
+      newMsg = { type: 'user', content: '', createdAt: new Date() };
     }
     setPendingUserMessage(newMsg);
     if (typeof onSend === 'function') {
       onSend(inputValue, imagePayload, { optimisticMsg: newMsg });
     }
-    // Images preview bar will disappear (because inputValue is cleared on send by parent, which resets images via useEffect above)
   }
+
+  // Omit separate image and text message logic: unified into one user message per send
   const hasPendingImages = Array.isArray(images) && images.some(img => (!img.dataUrl && !img.error) || img.error);
   const validImageCount = images.filter(img => img.dataUrl && !img.error).length;
+  // Allow send if there's text or at least one valid image, and no pending errors/loading/streaming
   const sendAllowed =
     (!disabled && !loading && !streaming && !hasPendingImages) &&
     ((inputValue && inputValue.trim().length > 0) || validImageCount > 0);
-  // Always keep message field enabled unless explicitly disabled or loading. Only error state disables send.
   let messageInputError = error || imgError;
-  // New or existing conversation: unified layout
   let messages = conversation?.messages || [];
-  // showPendingImagePreview: ONLY above the upload, not after send!
-  // As soon as user hits Send, images/images+text are no longer shown in preview--but instead inside the pending user message in chat.
+  // Only show image preview (above input) before Send is pressed, and not if there's a pending msg
   const showPendingImagePreview = (images.length > 0 && images.some(img => img.dataUrl && !img.error) && !pendingUserMessage);
   useEffect(() => {
-    // When the backend appends a user message, remove the optimistic one
     if (pendingUserMessage) {
       if (
         Array.isArray(messages) &&
@@ -142,7 +143,6 @@ export default function ConversationView({
         setPendingUserMessage(null);
       }
     }
-    // Also: if inputValue changes and is now non-empty (user started typing again after previous send), clear
     if (pendingUserMessage && inputValue !== '') {
       setPendingUserMessage(null);
     }
@@ -187,14 +187,13 @@ export default function ConversationView({
             No messages in this conversation yet.
           </div>
         ))}
-        {/* Show Optimistic/pending user message if present (inserted immediately after send, not yet confirmed by backend).
-            It is placed after the last user/assistant, so the assistant stream follows after. */}
+        {/* Show optimistic/pending user message immediately after send; only a single user message created (with images/text in content) */}
         {conversation && Array.isArray(messages) && messages.length > 0 && (
           <>
             {messages.map((msg, idx) => {
-              // Defensive: Always expect object form with type/content
+              // Defensive: Expect only type 'user' or 'assistant', never type 'image'
               const type = msg.type || (msg.role === 'assistant' ? 'assistant' : 'user');
-              let content = msg.content;
+              const content = msg.content;
               return (
                 <MessageBubble
                   key={idx}
@@ -205,7 +204,7 @@ export default function ConversationView({
                 />
               );
             })}
-            {/* Show pending user message (only if it is the most recent message and not already present in the list) */}
+            {/* Show pending user message (only if it is the most recent and not present in the list) */}
             {pendingUserMessage && (
               <MessageBubble
                 key="pending-user"
@@ -446,7 +445,6 @@ function MessageBubble({ type, content, streaming, label }) {
     }));
     multimodalText = content.text || '';
   }
-
   if (multimodalImages.length > 0) {
     renderedContent = (
       <div>
@@ -480,7 +478,6 @@ function MessageBubble({ type, content, streaming, label }) {
       </div>
     );
   } else {
-    // Single string or legacy text message
     renderedContent = (
       <ChatMarkdownContent isUser={isUser} type={type} text={typeof content === 'string' ? content : String(content ?? '')} />
     );
@@ -669,6 +666,7 @@ function MessageInput({
         setLocalError('');
         if (typeof onSend === 'function') onSend();
       }
+
     }
   }
 
@@ -733,6 +731,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 

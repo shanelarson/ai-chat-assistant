@@ -425,14 +425,16 @@ function App() {
                 return;
               }
               // Compose the message in the correct structure (OpenAI multimodal format or string)
+              // Always use OpenAI multimodal format: one user message with content array (images + text) or string
               let userMsgContent;
               if (hasImages) {
+                // Only add text if present; for images-only, skip text entry.
                 userMsgContent = [
                   ...imagesToSend.map(img => ({
                     type: 'image_url',
                     image_url: { url: img.data }
                   })),
-                  { type: 'text', text: trimmedMsg }
+                  ...(hasText ? [{ type: 'text', text: trimmedMsg }] : [])
                 ];
               } else {
                 userMsgContent = trimmedMsg;
@@ -576,7 +578,6 @@ function App() {
 // On successful message send and stream start (first chunk or streamEnd), clear inputValue (unless message was rejected)
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
-
 export default App;
 
 
@@ -588,4 +589,5 @@ export default App;
 
 
  
+
 
