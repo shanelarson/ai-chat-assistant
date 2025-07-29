@@ -321,32 +321,64 @@ function MessageBubble({ type, content, streaming, label, pending }) {
   }
   // 3. All other cases (finalized messages): render with markdown and code highlighting AND images if any
   let renderedContent;
-  // If the content is an OpenAI multimodal array (images + text), handle!
-  let multimodalImages = [];
-  let multimodalText = '';
+
+  // Defensive multimodal rendering for OpenAI-style array content: [{type:..., ...}]
   if (Array.isArray(content)) {
-    // OpenAI Vision format: array of { type: 'image_url' or 'text', ... }
-    for (const part of content) {
-      if (part.type === 'image_url' && part.image_url && part.image_url.url) {
-        multimodalImages.push({
-          url: part.image_url.url,
-          detail: part.image_url.detail,
-          description: (part.image_url.detail && typeof part.image_url.detail === 'string') ? part.image_url.detail : undefined,
-        });
-      } else if (part.type === 'text' && typeof part.text === 'string') {
-        multimodalText += part.text;
-      }
-    }
+    // Render image_url and text parts in order
+    renderedContent = (
+      <div>
+        {content.map((part, idx) => {
+          if (part && typeof part === 'object' && part.type === 'image_url' && part.image_url && part.image_url.url) {
+            return (
+              <div key={`image-${idx}`} style={{ marginBottom: 8 }}>
+                <img
+                  src={part.image_url.url}
+                  alt={part.image_url.detail || `Attachment ${idx + 1}`}
+                  style={{
+                    maxWidth: 120,
+                    maxHeight: 78,
+                    borderRadius: 7,
+                    border: '1.4px solid #dde3f3',
+                    marginBottom: 2,
+                    background: part.image_url.url.startsWith('data:image/') ? '#f7f9ff' : '#fafbfe',
+                    objectFit: 'contain'
+                  }}
+                />
+                {part.image_url.detail && (
+                  <div style={{
+                    maxWidth: 110,
+                    color: '#818193',
+                    fontSize: 10,
+                    textAlign: 'center'
+                  }}>{part.image_url.detail}</div>
+                )}
+              </div>
+            );
+          } else if (part && typeof part === 'object' && part.type === 'text' && typeof part.text === 'string') {
+            // Render as markdown
+            return (
+              <ChatMarkdownContent
+                key={`text-${idx}`}
+                isUser={isUser}
+                type={type}
+                text={part.text}
+              />
+            );
+          } else {
+            // Defensive fallback: render as a string (or skip)
+            return null;
+          }
+        })}
+      </div>
+    );
   } else if (content && typeof content === 'object' && content.images && Array.isArray(content.images)) {
-    // Support for "user" message with images and text (e.g., { images: [...], text: "..." }) from DB
-    multimodalImages = content.images.map(img => ({
+    // Legacy support: { images: [...], text: ... }
+    const multimodalImages = content.images.map(img => ({
       url: img.url,
       detail: img.detail,
       description: img.description,
     }));
-    multimodalText = content.text || '';
-  }
-  if (multimodalImages.length > 0) {
+    const multimodalText = content.text || '';
     renderedContent = (
       <div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 4, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -354,7 +386,6 @@ function MessageBubble({ type, content, streaming, label, pending }) {
             <div key={idx} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center'
             }}>
-              {/* Always render the image via the url property (base64 or external) */}
               {img.url && typeof img.url === "string"
                 ? (
                   <img
@@ -387,6 +418,7 @@ function MessageBubble({ type, content, streaming, label, pending }) {
       </div>
     );
   } else {
+    // Plain text or other fallback types
     renderedContent = (
       <ChatMarkdownContent isUser={isUser} type={type} text={typeof content === 'string' ? content : String(content ?? '')} />
     );
@@ -455,7 +487,6 @@ function MessageBubble({ type, content, streaming, label, pending }) {
           </span>
         )}
       </div>
-
       <div style={bubbleStyle}>
         {renderedContent}
       </div>
@@ -677,6 +708,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
