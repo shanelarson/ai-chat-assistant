@@ -24,7 +24,7 @@
     "dotenv": "^16.3.2",
     "socket.io-client": "^4.7.3",
     "html-webpack-plugin": "^5.5.0",
-    "style-loader": "^4.3.1",
+    "style-loader": "^3.3.4",
     "css-loader": "^6.8.1"
   },
   "devDependencies": {
