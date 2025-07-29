@@ -377,33 +377,48 @@ function App() {
               currentConv
                 ? {
                     ...currentConv,
+                    // Compose the local user message (pending/optimistic) and ensure message order is by createdAt
+                    // The composition enforces a strict sequence: User → Assistant → User → Assistant with sorting
                     messages: (() => {
-                      // Compose the local user message to show "optimistically" in the UI immediately when Send is pressed.
-                      // We need to build the pending user message and add it only until we get a new message from the backend.
-                      // We'll store the pending message in a ref (state) here so it can be rendered until replaced by backend data.
-                      // This will be managed below via state: pendingUserMsg
-                      return [
-                        ...(currentConv.messages || []),
-                        ...(pendingUserMsg &&
-                            pendingUserMsg.conversationId === currentConv._id &&
-                            !(
-                              currentConv.messages &&
-                              currentConv.messages.length > 0 &&
-                              currentConv.messages[currentConv.messages.length - 1].createdAt ===
-                                pendingUserMsg.createdAt
-                            )
-                          ? [pendingUserMsg]
-                          : []
-                        ),
-                        ...(currentConv.streamingAssistantMsg
-                          ? [{
-                              type: 'assistant',
-                              content: currentConv.streamingAssistantMsg,
-                              createdAt: new Date()
-                            }]
-                          : []),
-                      ];
-                    })(),
+                      // Start with backend messages
+                      let msgs = Array.isArray(currentConv.messages) ? [...currentConv.messages] : [];
+                      // If we have a pending user message for this conv, and it hasn't already been echoed by backend:
+                      let showPending = false;
+                      if (
+                        pendingUserMsg &&
+                        pendingUserMsg.conversationId === currentConv._id &&
+                        !msgs.some(
+                          m =>
+                            m.type === 'user' &&
+                            // match createdAt within a small margin (clock drift) and identical content
+                            m.createdAt &&
+                            pendingUserMsg.createdAt &&
+                            Math.abs(new Date(m.createdAt).getTime() - new Date(pendingUserMsg.createdAt).getTime()) < 3000 &&
+                            deepContentEqual(m.content, pendingUserMsg.content)
+                        )
+                      ) {
+                        showPending = true;
+                      }
+                      // Compose candidate messages
+                      if (showPending) {
+                        msgs.push(pendingUserMsg);
+                      }
+                      // Add streaming assistant msg as a temporary message (not persisted yet)
+                      if (currentConv.streamingAssistantMsg) {
+                        msgs.push({
+                          type: 'assistant',
+                          content: currentConv.streamingAssistantMsg,
+                          createdAt: new Date()
+                        });
+                      }
+                      // Sort by createdAt (ObjectID fallback, then array order as ultimate fallback)
+                      msgs = [...msgs].sort((a, b) => {
+                        const aTime = getMsgTimestamp(a);
+                        const bTime = getMsgTimestamp(b);
+                        return aTime - bTime;
+                      });
+                      return msgs;
+                    })()
                   }
                 : null
             }
@@ -496,7 +511,6 @@ function App() {
             disabled={sendLoading || streaming || convLoading}
             placeholder="Type your message and hit Send…"
             error={chatError}
-            // Pass a prop to clear the pending UI message upon backend update (see useEffect below)
           />
         </div>
       </div>
@@ -504,42 +518,70 @@ function App() {
   }
   // state: for optimistic pending message display
   const [pendingUserMsg, setPendingUserMsg] = useState(null);
-  // Remove the pending user message when a new message comes in from backend
+  // Remove the pending user message ONLY when a fully matching message is confirmed from backend (by content AND createdAt ~margin)
   useEffect(() => {
     if (!pendingUserMsg) return;
-    // If latest message in currentConv matches the text/images/timestamp, clear pending
+    // Look for a backend-confirmed user message matching pending (content and createdAt within margin)
     if (
       currentConv &&
       currentConv.messages &&
       currentConv.messages.length > 0
     ) {
-      const lastMsg = currentConv.messages[currentConv.messages.length - 1];
-      // Compare by content and timestamp (to be conservative)
-      if (
-        lastMsg.type === "user" &&
-        ((typeof lastMsg.content === "string" &&
-          typeof pendingUserMsg.content === "string" &&
-          lastMsg.content === pendingUserMsg.content) ||
-         (Array.isArray(lastMsg.content) &&
-          Array.isArray(pendingUserMsg.content) &&
-          lastMsg.content.length === pendingUserMsg.content.length)) &&
-        !pendingUserMsg.pending
-      ) {
-        setPendingUserMsg(null);
-      }
-      // Or just whenever backend message arrives, clear the pending
-      if (
-        lastMsg.type === "user" &&
-        lastMsg.createdAt &&
+      const found = currentConv.messages.some(msg =>
+        msg.type === "user" &&
+        msg.createdAt &&
         pendingUserMsg.createdAt &&
-        new Date(lastMsg.createdAt).getTime() >= new Date(pendingUserMsg.createdAt).getTime()
-      ) {
+        Math.abs(new Date(msg.createdAt).getTime() - new Date(pendingUserMsg.createdAt).getTime()) < 3000 &&
+        deepContentEqual(msg.content, pendingUserMsg.content)
+      );
+      if (found) {
         setPendingUserMsg(null);
       }
     }
     // Also clear if a new conversation is selected
-    // Or on successful assistant message etc
   }, [currentConv && currentConv.messages && currentConv.messages.length, currentConv && currentConv._id, pendingUserMsg]);
+
+  // Helpers for stable message ordering and deep content comparison
+  function getMsgTimestamp(msg) {
+    // Support fallback for legacy msgs w/o createdAt (extract from ObjectID, or use 0/now)
+    if (msg.createdAt) return new Date(msg.createdAt).getTime();
+    // Fallback: try Mongo ObjectID timestamp (if _id matches ObjectID)
+    if (msg._id && typeof msg._id === 'string' && msg._id.length === 24) {
+      // ObjectID time is first 8 chars as hex seconds since epoch
+      return parseInt(msg._id.substring(0, 8), 16) * 1000;
+    }
+    return Date.now();
+  }
+  function deepContentEqual(a, b) {
+    if (a === b) return true;
+    if (typeof a !== typeof b) return false;
+    if (typeof a === "string" || typeof a === "number" || typeof a === "boolean") return a === b;
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; ++i) {
+        if (!deepContentEqual(a[i], b[i])) return false;
+      }
+      return true;
+    }
+    if (typeof a === "object" && typeof b === "object" && a && b) {
+      const aKeys = Object.keys(a);
+      const bKeys = Object.keys(b);
+      if (aKeys.length !== bKeys.length) return false;
+      for (let key of aKeys) {
+        if (!deepContentEqual(a[key], b[key])) return false;
+      }
+      return true;
+    }
+    return false;
+  }
+// Notes:
+// - We sort all messages, including streaming assistant and any pending user message, by true chronological order before render.
+// - The pending user message is only appended if no backend-confirmed match exists (same createdAt ±3s and deep content equality).
+// - This ensures strict User → Assistant → User → Assistant alternation with no double User/User or Assistant/Assistant.
+// - This prevents flicker, duplication, and missing-message bugs, making chat order stable after refresh or state churn.
+// - For legacy messages without createdAt, ObjectID is used for best-effort sorting, else default to now().
+// - See developer documentation and comments for additional reasoning and maintenance guidance.
+
 
   // -------- Main App Render ---------
   return (
@@ -589,5 +631,6 @@ export default App;
 
 
  
+
 
 

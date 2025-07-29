@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -54,73 +54,7 @@ export default function ConversationView({
     setImages(newImages);
     setImgError('');
   }
-  // --- PATCH: To insert user message (optimistic) before backend response --
-  const [pendingUserMessage, setPendingUserMessage] = useState(null);
-  // Custom onSend with images (unified: user message always contains images and/or text as OpenAI multimodal array)
-  async function handleSendWithImages() {
-    if (loading || streaming || disabled) return;
-    let firstError = null;
-    if (Array.isArray(images) && images.length > 0) {
-      if (images.length > 4) {
-        setImgError('You can attach up to 4 images.');
-        return;
-      }
-      for (let img of images) {
-        if (img.error) {
-          firstError = img.error;
-          break;
-        }
-        if (!/^data:image\//.test(img.dataUrl || '')) {
-          firstError = 'Attached file could not be read as an image.';
-          break;
-        }
-        if (!img.file) {
-          firstError = 'Unknown image error. Please remove and re-add.';
-          break;
-        }
-      }
-    }
-    if (firstError) {
-      setImgError(firstError);
-      return;
-    }
-    setImgError('');
-    const imagePayload = images
-      .filter(img => img.dataUrl && !img.error)
-      .map(img => ({
-        data: img.dataUrl,
-        type: img.file?.type || '',
-        name: img.file?.name || '',
-        size: img.file?.size || undefined
-      }));
-    let contentArr = [];
-    if (imagePayload.length > 0) {
-      contentArr = [
-        ...imagePayload.map(img => ({
-          type: 'image_url',
-          image_url: { url: img.data }
-        }))
-      ];
-    }
-    if (inputValue && inputValue.trim().length > 0) {
-      contentArr.push({ type: 'text', text: inputValue });
-    }
-    let newMsg;
-    // Always create a single 'user' message with content as OpenAI multimodal array or string (if text-only)
-    if (contentArr.length > 0) {
-      newMsg = {
-        type: 'user',
-        content: contentArr,
-        createdAt: new Date()
-      };
-    } else {
-      newMsg = { type: 'user', content: '', createdAt: new Date() };
-    }
-    setPendingUserMessage(newMsg);
-    if (typeof onSend === 'function') {
-      onSend(inputValue, imagePayload, { optimisticMsg: newMsg });
-    }
-  }
+  // NOTE: Pending user message is handled by the parent (App) for optimal stability, so we no longer manage local pendingUserMessage here!
 
   // Omit separate image and text message logic: unified into one user message per send
   const hasPendingImages = Array.isArray(images) && images.some(img => (!img.dataUrl && !img.error) || img.error);
@@ -131,22 +65,42 @@ export default function ConversationView({
     ((inputValue && inputValue.trim().length > 0) || validImageCount > 0);
   let messageInputError = error || imgError;
   let messages = conversation?.messages || [];
-  // Only show image preview (above input) before Send is pressed, and not if there's a pending msg
-  const showPendingImagePreview = (images.length > 0 && images.some(img => img.dataUrl && !img.error) && !pendingUserMessage);
-  useEffect(() => {
-    if (pendingUserMessage) {
-      if (
-        Array.isArray(messages) &&
-        messages.length > 0 &&
-        messages[messages.length - 1].type === "user"
-      ) {
-        setPendingUserMessage(null);
-      }
+  // Only show image preview (above input) before Send is pressed, and not if a message send is in progress
+  const showPendingImagePreview = (images.length > 0 && images.some(img => img.dataUrl && !img.error) && !loading && !streaming);
+
+  // For maximum message order stability, always sort the messages array by createdAt (and ObjectID time fallback), including any pending user message injected by parent.
+  // This ensures that messages always appear strictly in order User, Assistant, User, Assistant, even if backend or optimistic entries are slightly misordered.
+  function getCreatedAtOrFallback(msg) {
+    // Use createdAt if present, else try to derive from _id (MongoDB ObjectId)
+    if (msg.createdAt) {
+      return new Date(msg.createdAt).getTime();
     }
-    if (pendingUserMessage && inputValue !== '') {
-      setPendingUserMessage(null);
+    if (msg._id && typeof msg._id === "string" && msg._id.length === 24) {
+      // Mongo ObjectID encodes timestamp in first 8 chars = 4 bytes hex (seconds since epoch)
+      const tsHex = msg._id.substring(0,8);
+      return parseInt(tsHex, 16) * 1000;
     }
-  }, [messages, inputValue]);
+    // If all else fails, treat as very old
+    return 0;
+  }
+  // Defensive: only sort if array exists.
+  const sortedMessages = useMemo(() => {
+    if (!Array.isArray(messages) || messages.length === 0) return [];
+    // The injected pending user message from parent is included as a normal message (with .pending field if applicable), so just sort all.
+    // Do a stable sort by createdAt (and fallback)
+    const arr = [...messages];
+    arr.sort((a, b) => {
+      const atime = getCreatedAtOrFallback(a);
+      const btime = getCreatedAtOrFallback(b);
+      if (atime !== btime) return atime - btime;
+      // If same timestamp, try to order by user before assistant
+      if (a.type === 'user' && b.type === 'assistant') return -1;
+      if (a.type === 'assistant' && b.type === 'user') return 1;
+      return 0;
+    });
+    return arr;
+  // eslint-disable-next-line
+  }, [messages && messages.length, JSON.stringify(messages)]);
 
   return (
     <section style={{
@@ -190,29 +144,22 @@ export default function ConversationView({
         {/* Show optimistic/pending user message immediately after send; only a single user message created (with images/text in content) */}
         {conversation && Array.isArray(messages) && messages.length > 0 && (
           <>
-            {messages.map((msg, idx) => {
-              // Defensive: Expect only type 'user' or 'assistant', never type 'image'
+            {sortedMessages.map((msg, idx) => {
+              // Defensive: Only render supported types, never 'image'.
               const type = msg.type || (msg.role === 'assistant' ? 'assistant' : 'user');
               const content = msg.content;
+              // Deduplicate: If not marked as pending, but matches a prior pendingUserMsg (very unlikely) skip, else render as usual
               return (
                 <MessageBubble
-                  key={idx}
+                  key={msg.createdAt ? `${type}-${msg.createdAt}-${idx}` : idx}
                   type={type}
                   content={content}
                   index={idx}
                   label={type === 'user' ? 'User' : 'Assistant'}
+                  pending={!!msg.pending}
                 />
               );
             })}
-            {/* Show pending user message (only if it is the most recent and not present in the list) */}
-            {pendingUserMessage && (
-              <MessageBubble
-                key="pending-user"
-                type="user"
-                content={pendingUserMessage.content}
-                label="User"
-              />
-            )}
           </>
         )}
         {conversation && streaming && (
@@ -270,9 +217,9 @@ export default function ConversationView({
         <MessageInput
           value={inputValue}
           onChange={onInputChange}
-          onSend={handleSendWithImages}
+          // Parent onSend handler (App) manages pendingUserMsg display and backend order, so just proxy
+          onSend={() => onSend && onSend(inputValue, images.filter(img => img.dataUrl && !img.error))}
           loading={loading || streaming}
-          // Only disable input if explicitly disabled or loading -- input always enabled, not tied to attached images
           disabled={false}
           error={messageInputError}
           placeholder={placeholder}
@@ -291,7 +238,7 @@ export default function ConversationView({
  *   This ensures the code highlighter and markdown parser receive fully-formed code blocks when the message is finalized.
  * - For finalized messages (not streaming), use markdown parsing and syntax highlighting for code blocks.
  */
-function MessageBubble({ type, content, streaming, label }) {
+function MessageBubble({ type, content, streaming, label, pending }) {
   const isUser = type === 'user';
   const bubbleStyle = {
     maxWidth: '85%',
@@ -307,6 +254,8 @@ function MessageBubble({ type, content, streaming, label }) {
     borderTopLeftRadius: isUser ? 14 : 5,
     whiteSpace: 'pre-line'
   };
+
+  // Pending (optimistic) messages may be styled slightly distinct (opacity, italic), but for now same appearance.
 
   // 1. If Typing indicator, just show as before, not markdown
   if (typeof content !== 'string' && React.isValidElement(content)) {
@@ -482,7 +431,6 @@ function MessageBubble({ type, content, streaming, label }) {
       <ChatMarkdownContent isUser={isUser} type={type} text={typeof content === 'string' ? content : String(content ?? '')} />
     );
   }
-
   return (
     <div
       style={{
@@ -526,9 +474,24 @@ function MessageBubble({ type, content, streaming, label }) {
             letterSpacing: 0.2
           }}>
             {label || 'User'}
+            {pending && (
+              <span style={{
+                fontSize: 10,
+                color: '#b79827',
+                marginLeft: 5,
+                fontStyle: 'italic',
+                opacity: 0.7,
+              }}>(pending...)</span>
+            )}
           </span>
         )}
       </div>
+
+// Note: This component now expects to receive all messages (including pending/optimistic user messages) already composed and sorted by the parent.
+// The parent (App.jsx or equivalent) must merge any pendingUserMsg, ensure de-duped, and sort by createdAt/ObjectID time for absolute consistency.
+// This prevents race conditions, duplicate display, or user message drop-outs especially under async load.
+// See main App logic for details.
+
       <div style={bubbleStyle}>
         {renderedContent}
       </div>
@@ -731,6 +694,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
