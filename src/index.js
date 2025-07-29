@@ -1,3 +1,4 @@
+
 import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -8,16 +9,21 @@ import cors from 'cors';
 import signupHandler from './httpEndpoints/signup.js';
 import loginHandler from './httpEndpoints/login.js';
 
-// ---- Load environment ----
+// ---- Load environment *AS FIRST STEP* ----
 dotenv.config();
 
 // ---- Validate environment variables ----
 import { validateRequiredEnvVars } from './functions/validateEnvVars.js';
 validateRequiredEnvVars();
 
-// ---- (NEW) Log environment/DB context at startup for diagnosis ----
+// ---- Log environment/DB context at startup for diagnosis ----
 import { logDbEnvContext } from './functions/logDbEnv.js';
 logDbEnvContext('Startup DB/ENV Context').then();
+
+// Startup Banner: Show which DB and NODE_ENV are in use (visibility)
+console.log(`[Startup] Detected NODE_ENV=${process.env.NODE_ENV || 'undefined'} | SERVER_PORT=${process.env.SERVER_PORT} | SOCKET_IO_PORT=${process.env.SOCKET_IO_PORT}`);
+console.log(`[Startup] Using MongoDB URI: ${process.env.MONGODB_URI_PROD || process.env.MONGODB_URI_DEV || process.env.MONGODB_URI_TEST} (dependent on NODE_ENV)`);
+console.log(`[Startup] .env variables loaded=${!!process.env.JWT_SECRET}`);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,6 +43,7 @@ app.use(cors({
   origin: CORS_ORIGIN,
   credentials: true
 }));
+
 // ---- Attach static UI (production only) ----
 if (NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'dist')));
@@ -48,6 +55,7 @@ if (NODE_ENV === 'production') {
     res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
   });
 }
+
 // ---- HTTP Endpoints ----
 app.post('/api/signup', signupHandler);
 app.post('/api/login', loginHandler);
@@ -56,18 +64,13 @@ app.post('/api/login', loginHandler);
 import conversationsRouter from './httpEndpoints/conversations.js';
 app.use('/api/conversations', conversationsRouter);
 
-
-
-
-
-
-
 // ---- Example: Auth middleware for future endpoints ----
 /*
 // import authMiddleware from './httpEndpoints/auth.js';
 // app.use(authMiddleware);
 // app.get('/secure-data', (req, res) => { ... })
 */
+
 // ---- HTTP Listen ----
 const server = http.createServer(app);
 
@@ -162,7 +165,6 @@ io.use(async (socket, next) => {
       return next(new Error('Database error during authentication.'));
     }
     if (!userDoc) {
-      // Removed: do NOT indiscriminately prune tokens from all users!
       // Only log for debug
       // eslint-disable-next-line no-console
       console.error('[SOCKET AUTH] Token did not match any user session:', {
@@ -181,27 +183,11 @@ io.use(async (socket, next) => {
   }
 });
 
-
-
-
-
-
-
-
-
 // Register socket.io events
-
-
-
-
-
-
 import handleMessage from './socketEventHandlers/message.js';
-
 io.on('connection', (socket) => {
   // Chat message event
   socket.on('message', (payload) => handleMessage(socket, payload));
-
   // -- More event handlers can be added here --
 });
 
@@ -212,7 +198,7 @@ server.listen(SERVER_PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`[Express] API + Static server listening on port ${SERVER_PORT}`);
   console.log(`[CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
-  // (NEW) Log DB env context for diagnosis after HTTP server starts
+  // Log DB env context for diagnosis after HTTP server starts
   logDbEnvContext('HTTP API Startup Context').then();
 });
 
@@ -225,4 +211,6 @@ if (SOCKET_IO_PORT !== SERVER_PORT) {
     logDbEnvContext('Socket.IO Startup Context').then();
   });
 }
+
+
 

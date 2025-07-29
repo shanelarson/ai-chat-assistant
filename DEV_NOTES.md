@@ -63,9 +63,22 @@ This file documents important requirements and pitfalls regarding authentication
 
 ## 7. Environment-specific Pitfalls
 
+- **It is REQUIRED that you set `NODE_ENV` in all backend process launches.**  
+  For example:  
+  ```
+  NODE_ENV=development npm run backend
+  ```
+  or for production:
+  ```
+  NODE_ENV=production npm run backend
+  ```
+  This ensures that the backend loads the correct .env variables and connects to the intended MongoDB database.  
+  The backend (Express/Socket.IO) and frontend UI must ALWAYS use consistent `NODE_ENV` settings and share the same .env/environment file.
+
 - In development, running `npm run backend` and `npm run dev`/React UI will use `NODE_ENV=development` unless overridden.
 - In production, always set **all** related environments (backend, workers, etc.) to `NODE_ENV=production` and set `MONGODB_URI_PROD` and all other sensitive secrets appropriately.
 - In CI/test, set `NODE_ENV=test` and `MONGODB_URI_TEST` so tests do not pollute dev/prod databases.
+- **If `NODE_ENV` is undefined or inconsistent across backend/frontend, authentication will fail** due to mismatched DB choice and/or secrets.
 
 ---
 
@@ -77,6 +90,13 @@ This file documents important requirements and pitfalls regarding authentication
 - **Is the JWT secret the same for issuing and verifying tokens?**
 - **Are you starting/stopping backend processes in such a way that DB connection caches and session state are not lost between requests?**
 - **Check the logs for detailed DB query criteria and what was actually found (or not found).**
+
+---
+
+## 8a. Recommended Practice: .env Loading and Debug Logs
+
+- Always ensure the code that runs at backend startup (e.g., `src/index.js`) calls `dotenv.config()` **as the very first import** or line of code so that env variables are read before any other code uses them.
+- At backend startup, print/log the detected `NODE_ENV`, the database URI to be used, and the path to the loaded `.env` file as a diagnostic check. This will help catch misconfigurations early.
 
 ---
 
@@ -98,3 +118,9 @@ If you discover a token-related bug that is not covered here, PLEASE update this
 ---
 
 Happy coding!
+ 
+---
+
+**REMINDER:**  
+If you see token lookup failures (after signup, login, or loading the UI), **immediately verify that `NODE_ENV` is set, matches between all backend services, and that the backend .env is loaded at startup.**  
+A misconfigured `NODE_ENV` (such as undefined) is the #1 cause of spurious "User not found or token revoked" errors in this system.

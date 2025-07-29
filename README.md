@@ -1,3 +1,18 @@
+
+## IMPORTANT: Running the Backend (Consistent NODE_ENV Setting)
+
+**You MUST set `NODE_ENV` when launching the backend to guarantee correct environment variable loading and database connections.**
+
+- In development, always start the backend with `NODE_ENV=development`, e.g.:
+    ```
+    NODE_ENV=development npm run backend
+    ```
+- In production deployments, use `NODE_ENV=production` and _ensure your production environment loads its own `.env` file_ and uses the correct `MONGODB_URI_PROD` and secrets.
+
+**If NODE_ENV is unset or set inconsistently, user authentication, token storage, and database operations may fail or mismatch across backend/frontend. This can cause "User not found or token revoked" errors and lost sessions.** Both frontend and backend must use the corresponding MongoDB URI (`MONGODB_URI_DEV` or `MONGODB_URI_PROD`) with matching `.env` settings.
+
+See DEV_NOTES.md for additional troubleshooting and environment tips.
+
 # AI Chat Assistant Project
 
 This repository provides the base for a full-stack AI Chat Assistant with support for user authentication, chat conversation history, OpenAI integration, and real-time communication using Socket.io. The backend is built with ExpressJS and MongoDB, and the frontend with ReactJS, bundled via Webpack.
