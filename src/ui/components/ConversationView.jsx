@@ -30,52 +30,9 @@ export default function ConversationView({
   placeholder,
   error
 }) {
+  // All hooks must be called on every render before any return.
   // For autoscroll to bottom on new message/stream
   const messagesEndRef = useRef(null);
-
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      // Scroll to bottom on new messages/stream
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-  }, [conversation, streaming, inputValue]);
-
-  if (!conversation) {
-    // Starting a new conversation
-    return (
-      <section style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: 0,
-        background: '#fff'
-      }}>
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#b7bfcf',
-          fontSize: 22,
-          fontWeight: 500
-        }}>
-          Start a New Conversation
-        </div>
-        <MessageInput
-          value={inputValue}
-          onChange={onInputChange}
-          onSend={onSend}
-          loading={loading || streaming}
-          disabled={disabled}
-          error={error}
-          placeholder={placeholder}
-        />
-      </section>
-    );
-  }
-
-  // Standard conversation view
-  const messages = conversation.messages || [];
   // --- Images state for send box ---
   const [images, setImages] = useState([]);
   const [imgError, setImgError] = useState('');
@@ -84,6 +41,12 @@ export default function ConversationView({
     if (!inputValue && images.length > 0) setImages([]);
     // eslint-disable-next-line
   }, [inputValue]);
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      // Scroll to bottom on new messages/stream
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [conversation, streaming, inputValue]);
 
   // Handler for image attachment change (reset imgError on change)
   function handleImageChange(newImages) {
@@ -127,6 +90,43 @@ export default function ConversationView({
     }
     // UI clears handled after success/error by parent
   }
+
+  if (!conversation) {
+    // Starting a new conversation
+    return (
+      <section style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        background: '#fff'
+      }}>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#b7bfcf',
+          fontSize: 22,
+          fontWeight: 500
+        }}>
+          Start a New Conversation
+        </div>
+        <MessageInput
+          value={inputValue}
+          onChange={onInputChange}
+          onSend={onSend}
+          loading={loading || streaming}
+          disabled={disabled}
+          error={error}
+          placeholder={placeholder}
+        />
+      </section>
+    );
+  }
+
+  // Standard conversation view
+  const messages = conversation.messages || [];
 
   return (
     <section style={{
@@ -601,4 +601,5 @@ function MessageInput({
     </form>
   );
 }
+
 
