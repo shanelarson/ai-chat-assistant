@@ -401,7 +401,10 @@ function App() {
             streaming={streaming}
             inputValue={inputValue}
             onInputChange={e => setInputValue(e.target.value)}
-            onSend={handleSend}
+            onSend={() => {
+              handleSend();
+              setInputValue('');
+            }}
             disabled={sendLoading || streaming || convLoading}
             placeholder="Type your message and hit Send…"
             error={chatError}
@@ -448,10 +451,4 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
-
-
-
-
-
-
 
