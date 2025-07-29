@@ -1,11 +1,11 @@
 import { connectToMongo } from '../functions/mongo.js';
-import { OpenAIApi, Configuration } from 'openai';
+import OpenAI from 'openai';
 
 // Helper to get OpenAI config
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   const baseURL = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1';
-  return new OpenAIApi(new Configuration({ apiKey, basePath: baseURL }));
+  return new OpenAI({ apiKey, baseURL });
 }
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
 
@@ -152,3 +152,4 @@ export default async function handleMessage(socket, payload) {
     socket.emit('errorMessage', { error: 'Internal server error.' });
   }
 }
+
