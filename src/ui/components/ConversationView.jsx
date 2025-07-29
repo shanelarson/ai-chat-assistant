@@ -340,6 +340,7 @@ function MessageBubble({ type, content, streaming, label, pending }) {
   let renderedContent;
   // Defensive multimodal rendering for OpenAI-style array content: [{type:..., ...}]
   if (Array.isArray(normalizedContent)) {
+    // Defensive guard: never allow object as React child! Only render recognized types and warn on unknowns.
     renderedContent = (
       <div>
         {normalizedContent.map((part, idx) => {
@@ -348,7 +349,7 @@ function MessageBubble({ type, content, streaming, label, pending }) {
           // - { type: 'image_url', image_url: { url: ..., detail, ... } }
           // - { url: ..., description, ... } (legacy/alt)
           // - plain string: not supported for image here
-          if (part && typeof part === 'object') {
+          if (part && typeof part === 'object' && !React.isValidElement(part)) {
             // OpenAI multimodal/chat format: {type: 'image_url', image_url: { url, detail, ... } }
             if (part.type === 'image_url' && part.image_url && part.image_url.url) {
               return (
@@ -416,16 +417,25 @@ function MessageBubble({ type, content, streaming, label, pending }) {
                 />
               );
             }
-            // Unknown object type: render fallback
+            // Unknown object type: render fallback warning
+            // Defensive: Explicitly render a placeholder for invalid/unknown objects
             return (
-              <span key={`broken-image-${idx}`} style={{ color: '#c95f24', fontSize: 22, marginBottom: 8 }}>
-                Broken image
+              <span key={`invalid-content-${idx}`} style={{ color: 'red', fontSize: 14, marginBottom: 8 }}>
+                Invalid content
               </span>
             );
-          } else if (typeof part === 'string') {
-            return <span key={`text-string-${idx}`}>{part}</span>;
+          } else if (typeof part === 'string' || typeof part === 'number') {
+            // Render as string, not as object
+            return <span key={`text-string-${idx}`}>{String(part)}</span>;
+          } else if (React.isValidElement(part)) {
+            return <React.Fragment key={`element-${idx}`}>{part}</React.Fragment>;
           } else {
-            return null;
+            // Any other type (boolean, null, undefined) -> skip or warn
+            return (
+              <span key={`invalid-content-${idx}`} style={{ color: 'red', fontSize: 14, marginBottom: 8 }}>
+                Invalid content
+              </span>
+            );
           }
         })}
       </div>
@@ -476,6 +486,7 @@ function MessageBubble({ type, content, streaming, label, pending }) {
       </div>
     );
   } else {
+    // Defensive: Only pass string values to markdown. If not string, force to String().
     renderedContent = (
       <ChatMarkdownContent isUser={isUser} type={type} text={typeof normalizedContent === 'string' ? normalizedContent : String(normalizedContent ?? '')} />
     );
@@ -594,6 +605,7 @@ function ChatMarkdownContent({ isUser, type, text }) {
         tabIndex={0}
       >
         <ReactMarkdown
+          // Defensive: Always coerce text to string
           children={typeof text === 'string' ? text : String(text ?? '')}
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSanitize]}
@@ -608,8 +620,15 @@ function ChatMarkdownContent({ isUser, type, text }) {
                 lang = "javascript";
               }
               const isSupported = SUPPORTED_LANGS.includes(lang);
+              // Defensive: codeString must be a string, and children must NOT be object
+              let codeString;
+              if (Array.isArray(children)) {
+                // Remove all non-string-like entries in children defensively
+                codeString = children.map(c => (typeof c === "string" || typeof c === "number") ? String(c) : '').join('');
+              } else {
+                codeString = typeof children === "string" || typeof children === "number" ? String(children) : '';
+              }
               if (!inline && isSupported) {
-                const codeString = Array.isArray(children) ? children.join('') : String(children);
                 return <CodeBlock value={codeString} language={lang} className={className} />;
               }
               return (
@@ -623,7 +642,7 @@ function ChatMarkdownContent({ isUser, type, text }) {
                   wordBreak: "break-word",
                   overflowX: "auto"
                 }} {...props}>
-                  {children}
+                  {codeString}
                 </code>
               );
             }
@@ -647,6 +666,11 @@ function ChatMarkdownContent({ isUser, type, text }) {
   }
   return renderedContent;
 }
+
+// NOTE: This component and all content rendering must defensively guard against object-as-child.
+// All mapping over normalizedContent (and markdown code blocks) must never create object children.
+// Only recognized strings, numbers, or elements are rendered; all others trigger a placeholder warning.
+
 
 // Renders text input ONLY (for composition area, used below images)
 function MessageInput({
@@ -756,6 +780,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
