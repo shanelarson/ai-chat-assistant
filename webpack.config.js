@@ -2,6 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
+import webpack from 'webpack';
 
 // Load .env variables for Webpack's DefinePlugin
 dotenv.config();
@@ -68,6 +69,12 @@ export default {
       templateParameters: {
         PUBLIC_URL
       }
+    }),
+    new webpack.DefinePlugin({
+      'process.env.NODE_ENV': JSON.stringify(mode),
+      'process.env.PUBLIC_URL': JSON.stringify(PUBLIC_URL),
+      'process.env.REACT_APP_API_URL': JSON.stringify(API_URL),
+      'process.env.REACT_APP_SOCKET_URL': JSON.stringify(SOCKET_URL)
     })
   ],
   devServer: {
@@ -95,12 +102,5 @@ export default {
     splitChunks: {
       chunks: 'all'
     }
-  },
-  // Provide env vars to frontend bundle
-  define: {
-    'process.env.NODE_ENV': JSON.stringify(mode),
-    'process.env.PUBLIC_URL': JSON.stringify(PUBLIC_URL),
-    'process.env.REACT_APP_API_URL': JSON.stringify(API_URL),
-    'process.env.REACT_APP_SOCKET_URL': JSON.stringify(SOCKET_URL)
   }
 };
