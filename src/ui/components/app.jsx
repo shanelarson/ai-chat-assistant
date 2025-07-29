@@ -332,7 +332,10 @@ function App() {
       return (
         <div style={{
           display: 'flex',
-          minHeight: 'calc(100vh - 56px)',
+          height: 'calc(100vh - 56px)',
+          width: '100vw',
+          maxWidth: '100vw',
+          overflow: 'hidden',
           alignItems: 'center',
           justifyContent: 'center',
           background: '#f7fbff'
@@ -350,7 +353,15 @@ function App() {
       );
     }
     return (
-      <div style={{ display: 'flex', minHeight: 'calc(100vh - 56px)' }}>
+      <div
+        style={{
+          display: 'flex',
+          height: 'calc(100vh - 56px)',
+          width: '100vw',
+          maxWidth: '100vw',
+          overflow: 'hidden',
+        }}
+      >
         <ConversationList
           conversations={conversations}
           selectedId={selected}
@@ -358,7 +369,16 @@ function App() {
           onStartNew={handleStartNew}
           loading={convLoading}
         />
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
           <ConversationView
             conversation={
               currentConv
@@ -428,6 +448,8 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
+
+
 
 
 
