@@ -5,6 +5,10 @@ import rehypeSanitize from 'rehype-sanitize';
 import 'github-markdown-css/github-markdown-light.css';
 import CodeBlock from './CodeBlock';
 
+// Import SUPPORTED_LANGS and getLanguage for consistent language detection
+import { SUPPORTED_LANGS } from './CodeBlock';
+import { getLanguage } from './CodeBlock';
+
 /**
  * ConversationView
  * Props:
@@ -237,21 +241,13 @@ function MessageBubble({ type, content, streaming, label }) {
             a: ({ node, ...props }) => (
               <a {...props} target="_blank" rel="noopener noreferrer">{props.children}</a>
             ),
-            code({node, inline, className, children, ...props}) {
-              // Only render with CodeBlock for block-level and supported languages
-              // Supported: jsx, javascript, typescript
-              const matchBlock = !inline && className && (
-                /language-jsx|language-javascript|language-typescript/.test(className)
-              );
-              if (!inline && matchBlock) {
+            code({ node, inline, className, children, ...props }) {
+              // Use CodeBlock for block-level code blocks with supported language
+              const lang = getLanguage(className);
+              const isSupported = SUPPORTED_LANGS.includes(lang);
+              if (!inline && isSupported) {
                 // join children in case react-markdown passes as array
                 const codeString = Array.isArray(children) ? children.join('') : String(children);
-                // Pick language
-                let lang = '';
-                if (className) {
-                  const m = className.match(/language-([\w-]+)/);
-                  if (m && m[1]) lang = m[1];
-                }
                 return <CodeBlock value={codeString} language={lang} className={className} />;
               }
               // For inline or other code, keep original
@@ -429,6 +425,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
