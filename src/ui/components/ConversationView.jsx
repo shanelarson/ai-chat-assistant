@@ -272,13 +272,16 @@ function MessageBubble({ type, content, streaming, label }) {
       </div>
     );
   }
-
   // 3. All other cases (finalized messages): render with markdown and code highlighting
   let renderedContent;
   try {
     renderedContent = (
       <div
-        className="markdown-body"
+        className={
+          isUser
+            ? "markdown-body userBackgroundColor"
+            : "markdown-body assistantBackgroundColor"
+        }
         style={{
           userSelect: "text",
           margin: 0,
@@ -399,6 +402,13 @@ function MessageBubble({ type, content, streaming, label }) {
 
 
 
+
+
+
+
+
+
+
 // Renders text input (fixed bottom) for new message
 function MessageInput({
   value,
@@ -483,6 +493,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
