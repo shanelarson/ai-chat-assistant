@@ -262,7 +262,41 @@ export default function ConversationView({
           error={messageInputError}
           placeholder={placeholder}
         />
+      </div>
+    </section>
+  );
   // When conversation.messages or inputValue change, clear the pendingUserMessage
+}
+
+// Clear pendingUserMessage when messages or inputValue change (should be a hook, not inside return)
+// Move this outside and above the return in the component
+// BUT in React, hooks must be inside component, so we should put this above the return!
+// So, add this just before the return statement in ConversationView:
+
+// Place this ABOVE `return (...)`, but inside the ConversationView function:
+/*
+  useEffect(() => {
+    // When the backend appends a user message, remove the optimistic one
+    if (pendingUserMessage) {
+      // If there is a match for pendingUserMessage in messages, clear our pending since it's now reflected from backend
+      // (do a match by type:user, content is the same array structure/text, and createdAt ~equal allowed, but simplest: just clear if last is user)
+      if (
+        Array.isArray(messages) &&
+        messages.length > 0 &&
+        messages[messages.length - 1].type === "user"
+      ) {
+        setPendingUserMessage(null);
+      }
+    }
+    // Also: if inputValue changes and is now non-empty (user started typing again after previous send), clear
+    // Defensive: if user edits inputValue, clear the pending preview
+    if (pendingUserMessage && inputValue !== '') {
+      setPendingUserMessage(null);
+    }
+  }, [messages, inputValue]);
+*/
+// Place the following effect INSIDE the ConversationView function, above `return (...)`:
+
   useEffect(() => {
     // When the backend appends a user message, remove the optimistic one
     if (pendingUserMessage) {
@@ -283,9 +317,6 @@ export default function ConversationView({
     }
   }, [messages, inputValue]);
 
-      </div>
-    </section>
-  );
 }
 // Render a message bubble in chat UI: `type` is 'user' or 'assistant'
 /**
@@ -737,6 +768,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
