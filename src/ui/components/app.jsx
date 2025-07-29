@@ -47,10 +47,12 @@ function App() {
       setLoggedIn(false);
     }
   }, [token]);
-
-  // Helper: Auth fetch to backend
+  // Helper: Auth fetch to backend using /api proxy path
   const apiFetch = useCallback((url, opts = {}) => {
-    return fetch(`${API_URL}${url}`, {
+    // Always prefix /api unless already present
+    let proxiedUrl =
+      url.startsWith('/api/') ? url : url.startsWith('/api') ? url : `/api${url.startsWith('/') ? url : '/' + url}`;
+    return fetch(proxiedUrl, {
       ...opts,
       headers: {
         ...(opts.headers || {}),
@@ -289,6 +291,8 @@ function App() {
       method: 'POST',
       body: JSON.stringify({})
     })
+
+
       .then(res => res.json())
       .then(newConv => {
         if (newConv && newConv._id) {
