@@ -189,12 +189,11 @@ function App() {
           }));
         }
       });
-
       // Finalize response
       sock.on('messageStreamEnd', ({ conversationId }) => {
         setStreaming(false);
         setSendLoading(false);
-        // Merge streamingAssistantMsg into messages array
+        // Merge streamingAssistantMsg into messages array, and then REFRESH conversations from backend to always get full, correct history.
         setConversations(prevConvs =>
           prevConvs.map(conv => {
             if (conv._id !== conversationId) return conv;
@@ -207,29 +206,25 @@ function App() {
               return {
                 ...conv,
                 messages: [...(conv.messages || []), aiMsg],
-                streamingAssistantMsg: undefined
+                streamingAssistantMsg: undefined,
               };
             }
             return { ...conv, streamingAssistantMsg: undefined };
           })
         );
-        // If current, update
-        if (currentConv && currentConv._id === conversationId) {
-          setCurrentConv(conv => {
-            if (conv.streamingAssistantMsg) {
-              return {
-                ...conv,
-                messages: [...(conv.messages || []), {
-                  type: 'assistant',
-                  content: conv.streamingAssistantMsg,
-                  createdAt: new Date()
-                }],
-                streamingAssistantMsg: undefined
-              };
+        // Immediately fetch latest conversations from backend to ensure message history is not stale.
+        apiFetch('/conversations')
+          .then(res => res.json())
+          .then(data => {
+            if (Array.isArray(data)) {
+              setConversations(data);
+              // If this conversation was active, refresh currentConv accordingly.
+              const conv = data.find(c => c._id === conversationId);
+              if (conv && selected === conversationId) {
+                setCurrentConv(conv);
+              }
             }
-            return { ...conv, streamingAssistantMsg: undefined };
           });
-        }
       });
 
       setSocket(sock);
@@ -271,7 +266,6 @@ function App() {
       .finally(() => setConvLoading(false));
     // eslint-disable-next-line
   }, [loggedIn, token]);
-
   // Keep currentConv in sync with conversations & selected
   useEffect(() => {
     if (!selected) {
@@ -289,6 +283,16 @@ function App() {
     setInputValue('');
     setSendLoading(false);
     setStreaming(false);
+    // Refresh all conversations & update currentConv
+    apiFetch('/conversations')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setConversations(data);
+          const conv = data.find(c => c._id === conversationId);
+          if (conv) setCurrentConv(conv);
+        }
+      });
   }
   function handleStartNew() {
     // No conversation is created until the user SENDS their first message;
@@ -459,10 +463,17 @@ function App() {
                   });
                   const newConv = await res.json();
                   if (newConv && newConv._id) {
-                    // Immediately select/switch UI to new conversation
-                    setConversations([newConv, ...conversations]);
-                    setSelected(newConv._id);
-                    setCurrentConv(newConv);
+                    // Instead of just prepending the empty conv, always reload full list from backend to avoid message drop
+                    apiFetch('/conversations')
+                      .then(res2 => res2.json())
+                      .then(data => {
+                        if (Array.isArray(data)) {
+                          setConversations(data);
+                          setSelected(newConv._id);
+                          const convObj = data.find(c => c._id === newConv._id);
+                          setCurrentConv(convObj || newConv);
+                        }
+                      });
                     // Now send the first message in this conversation
                     setSendLoading(true);
                     setStreaming(true);
@@ -622,5 +633,9 @@ function App() {
 // On successful message send and stream start (first chunk or streamEnd), clear inputValue (unless message was rejected)
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
+
 export default App;
+
+
+
 
