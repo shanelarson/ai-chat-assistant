@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import PropTypes from 'prop-types';
-import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import js from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
 import ts from 'react-syntax-highlighter/dist/esm/languages/prism/typescript';
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
@@ -179,5 +179,6 @@ CodeBlock.propTypes = {
   language: PropTypes.string,
   className: PropTypes.string,
 };
+
 
 
