@@ -1,5 +1,8 @@
 import React, { useRef } from 'react';
 
+// Optionally import PropTypes if you want runtime validation
+// import PropTypes from 'prop-types';
+
 /**
  * ImageUploadInput
  * 
@@ -13,7 +16,7 @@ import React, { useRef } from 'react';
  */
 export default function ImageUploadInput({
   images,
-  onChange,
+  onChange = () => {},
   loading,
   maxImages = 4,
   style = {},
@@ -316,3 +319,16 @@ export default function ImageUploadInput({
     </div>
   );
 }
+
+// Optional: PropTypes validation to help catch development misuse
+/*
+import PropTypes from 'prop-types';
+ImageUploadInput.propTypes = {
+  images: PropTypes.array,
+  onChange: PropTypes.func,
+  loading: PropTypes.bool,
+  maxImages: PropTypes.number,
+  style: PropTypes.object,
+  error: PropTypes.string,
+};
+*/
