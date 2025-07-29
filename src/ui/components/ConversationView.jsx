@@ -343,40 +343,84 @@ function MessageBubble({ type, content, streaming, label, pending }) {
     renderedContent = (
       <div>
         {normalizedContent.map((part, idx) => {
-          if (part && typeof part === 'object' && part.type === 'image_url' && part.image_url && part.image_url.url) {
-            return (
-              <div key={`image-${idx}`} style={{ marginBottom: 8 }}>
-                <img
-                  src={part.image_url.url}
-                  alt={part.image_url.detail || `Attachment ${idx + 1}`}
-                  style={{
-                    maxWidth: 120,
-                    maxHeight: 78,
-                    borderRadius: 7,
-                    border: '1.4px solid #dde3f3',
-                    marginBottom: 2,
-                    background: part.image_url.url.startsWith('data:image/') ? '#f7f9ff' : '#fafbfe',
-                    objectFit: 'contain'
-                  }}
+          // --- Unified image rendering ---
+          // Handles:
+          // - { type: 'image_url', image_url: { url: ..., detail, ... } }
+          // - { url: ..., description, ... } (legacy/alt)
+          // - plain string: not supported for image here
+          if (part && typeof part === 'object') {
+            // OpenAI multimodal/chat format: {type: 'image_url', image_url: { url, detail, ... } }
+            if (part.type === 'image_url' && part.image_url && part.image_url.url) {
+              return (
+                <div key={`image-${idx}`} style={{ marginBottom: 8 }}>
+                  <img
+                    src={part.image_url.url}
+                    alt={part.image_url.detail || part.image_url.description || `Attachment ${idx + 1}`}
+                    style={{
+                      maxWidth: 120,
+                      maxHeight: 78,
+                      borderRadius: 7,
+                      border: '1.4px solid #dde3f3',
+                      marginBottom: 2,
+                      background: part.image_url.url.startsWith('data:image/') ? '#f7f9ff' : '#fafbfe',
+                      objectFit: 'contain'
+                    }}
+                  />
+                  {(part.image_url.detail || part.image_url.description) && (
+                    <div style={{
+                      maxWidth: 110,
+                      color: '#818193',
+                      fontSize: 10,
+                      textAlign: 'center'
+                    }}>{part.image_url.detail || part.image_url.description}</div>
+                  )}
+                </div>
+              );
+            }
+            // Legacy/alternative: { url: ... } or { url: ..., description: ... }
+            if (part.url && typeof part.url === 'string') {
+              return (
+                <div key={`image-legacy-${idx}`} style={{ marginBottom: 8 }}>
+                  <img
+                    src={part.url}
+                    alt={part.description || part.detail || `Attachment ${idx + 1}`}
+                    style={{
+                      maxWidth: 120,
+                      maxHeight: 78,
+                      borderRadius: 7,
+                      border: '1.4px solid #dde3f3',
+                      marginBottom: 2,
+                      background: part.url.startsWith('data:image/') ? '#f7f9ff' : '#fafbfe',
+                      objectFit: 'contain'
+                    }}
+                  />
+                  {(part.description || part.detail) && (
+                    <div style={{
+                      maxWidth: 110,
+                      color: '#818193',
+                      fontSize: 10,
+                      textAlign: 'center'
+                    }}>{part.description || part.detail}</div>
+                  )}
+                </div>
+              );
+            }
+            // Text format: { type: 'text', text: ... }
+            if (part.type === 'text' && typeof part.text === 'string') {
+              return (
+                <ChatMarkdownContent
+                  key={`text-${idx}`}
+                  isUser={isUser}
+                  type={type}
+                  text={part.text}
                 />
-                {part.image_url.detail && (
-                  <div style={{
-                    maxWidth: 110,
-                    color: '#818193',
-                    fontSize: 10,
-                    textAlign: 'center'
-                  }}>{part.image_url.detail}</div>
-                )}
-              </div>
-            );
-          } else if (part && typeof part === 'object' && part.type === 'text' && typeof part.text === 'string') {
+              );
+            }
+            // Unknown object type: render fallback
             return (
-              <ChatMarkdownContent
-                key={`text-${idx}`}
-                isUser={isUser}
-                type={type}
-                text={part.text}
-              />
+              <span key={`broken-image-${idx}`} style={{ color: '#c95f24', fontSize: 22, marginBottom: 8 }}>
+                Broken image
+              </span>
             );
           } else if (typeof part === 'string') {
             return <span key={`text-string-${idx}`}>{part}</span>;
@@ -712,6 +756,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
