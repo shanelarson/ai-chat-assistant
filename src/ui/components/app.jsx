@@ -488,7 +488,7 @@ function App() {
                       }))
                     });
                     setInputValue('');
-                    // Attach conversationId to pendingUserMsg so React knows which convo it's now part of
+                    setImages([]); // Clear images after send (NEW CONVO)
                     setPendingUserMsg({ ...pendingMsgObj, conversationId: newConv._id });
                   } else {
                     setChatError('Failed to create new conversation.');
@@ -515,11 +515,14 @@ function App() {
                 }))
               });
               setInputValue('');
+              setImages([]); // Clear images after send (EXISTING CONVO)
               setPendingUserMsg({ ...pendingMsgObj, conversationId: currentConv._id });
             }}
             disabled={sendLoading || streaming || convLoading}
             placeholder="Type your message and hit Send…"
             error={chatError}
+            images={images}
+            onImagesChange={setImages}
           />
         </div>
       </div>
@@ -527,6 +530,8 @@ function App() {
   }
   // state: for optimistic pending message display
   const [pendingUserMsg, setPendingUserMsg] = useState(null);
+  // Unified images state for pending message composition (only cleared on send or conversation switch)
+  const [images, setImages] = useState([]);
   // Remove the pending user message ONLY when a fully matching message is confirmed from backend (by content AND createdAt ~margin)
   useEffect(() => {
     if (!pendingUserMsg) return;
@@ -554,6 +559,7 @@ function App() {
         currentConv._id !== pendingUserMsg.conversationId)
     ) {
       setPendingUserMsg(null);
+      setImages([]); // Clear images when switching conversations
     }
   }, [currentConv && currentConv.messages && currentConv.messages.length, currentConv && currentConv._id, pendingUserMsg]);
   // Helpers for stable message ordering and deep content comparison
@@ -634,7 +640,11 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 
+export { }
+
+
 export default App;
+
 
 
 

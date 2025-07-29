@@ -38,11 +38,8 @@ export default function ConversationView({
   // --- Images state for send box ---
   const [images, setImages] = useState([]);
   const [imgError, setImgError] = useState('');
-  // Synchronized: if inputValue changes after send, clear images
-  useEffect(() => {
-    if (!inputValue && images.length > 0) setImages([]);
-    // eslint-disable-next-line
-  }, [inputValue]);
+  // No longer clear images when text is deleted: only clear on send or conversation switch, not when input becomes empty.
+  // (Clearing logic should be handled in parent/App.jsx when needed.)
   useEffect(() => {
     if (messagesEndRef.current) {
       // Scroll to bottom on new messages/stream
@@ -181,6 +178,7 @@ export default function ConversationView({
     </section>
   );
 }
+
 
 // Render a message bubble in chat UI: `type` is 'user' or 'assistant'
 /**
@@ -780,6 +778,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
