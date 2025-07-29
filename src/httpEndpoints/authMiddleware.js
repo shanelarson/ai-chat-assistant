@@ -70,6 +70,25 @@ export default async function authMiddleware(req, res, next) {
           return res.status(401).json({ error: 'Email changed. Please log in again.' });
         }
       }
+      // Defensive: check for multiple users with the same token (should not happen)
+      const count = await usersCol.countDocuments({ tokens: { $elemMatch: { $eq: token } } });
+      if (count > 1) {
+        // eslint-disable-next-line no-console
+        console.error('[AUTH] WARNING: Multiple users share the same token!', { token, count });
+      }
+      // Log if user not found for extra diagnostics
+      if (!user) {
+        // eslint-disable-next-line no-console
+        console.error('[AUTH] Token lookup failed:', {
+          usingDb: db.databaseName,
+          collection: usersCol.collectionName,
+          token: token,
+          decodedUserId: decoded?.userId,
+          decodedEmail: decoded?.email,
+          userIdQuery: toObjectId(decoded.userId)
+        });
+        return res.status(401).json({ error: 'User not found or token revoked.' });
+      }
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Auth middleware DB lookup error:', e, {
@@ -78,18 +97,6 @@ export default async function authMiddleware(req, res, next) {
       });
       return res.status(500).json({ error: 'Database error during authentication.' });
     }
-    if (!user) {
-      // Do NOT remove the token globally from all users!
-      // Just log the failure for future debugging.
-      // eslint-disable-next-line no-console
-      console.error('[AUTH] Token in request did not match any valid user session:', {
-        token: token,
-        decodedUserId: decoded?.userId,
-        decodedEmail: decoded?.email
-      });
-      return res.status(401).json({ error: 'User not found or token revoked.' });
-    }
-
     // Attach user and token to request
     req.user = user;
     req.token = token;
@@ -100,3 +107,4 @@ export default async function authMiddleware(req, res, next) {
     res.status(500).json({ error: 'Internal server error (auth).' });
   }
 }
+

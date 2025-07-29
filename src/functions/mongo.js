@@ -1,3 +1,12 @@
+
+/**
+ * NOTE: The MongoDB connection logic here always uses the database name 'ai_chat_assistant'
+ * regardless of NODE_ENV. All environments use the same DB name, but the actual cluster/URI
+ * can differ via env variables (see getMongoUri).
+ *
+ * => Keep NODE_ENV and MONGODB_URI_* consistent across all processes for users/tokens to be found!
+ * => See DEV_NOTES.md for important setup & troubleshooting!
+ */
 import { MongoClient } from 'mongodb';
 
 const getMongoUri = () => {
@@ -30,11 +39,11 @@ export async function connectToMongo() {
   });
   await client.connect();
   // Use the fixed database name for the entire application
+  // This MUST match across development, test, and production!
   const dbName = "ai_chat_assistant";
   db = client.db(dbName);
   return db;
 }
-
 /**
  * Get already connected MongoDB database instance, or throw if not connected
  * @returns {Db}
