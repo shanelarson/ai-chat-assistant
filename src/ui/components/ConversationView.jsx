@@ -55,7 +55,6 @@ export default function ConversationView({
     setImages(newImages);
     setImgError('');
   }
-
   // Custom onSend with images
   async function handleSendWithImages() {
     // Frontend validation: all images must be valid, loaded, no error, < max
@@ -87,51 +86,31 @@ export default function ConversationView({
     }
     setImgError('');
     // DEFER to onSend: pass images in custom event
+    // Always pass both text and image data array
+    const imagePayload = images
+      .filter(img => img.dataUrl && !img.error)
+      .map(img => ({
+        data: img.dataUrl,
+        type: img.file?.type || '',
+        name: img.file?.name || '',
+        size: img.file?.size || undefined
+      }));
     if (typeof onSend === 'function') {
-      onSend(inputValue);
+      onSend(inputValue, imagePayload);
     }
     // UI clears handled after success/error by parent
   }
   // Start: prevent send unless all images are loaded (no error, base64 present)
   const hasPendingImages = Array.isArray(images) && images.some(img => (!img.dataUrl && !img.error) || img.error);
-  const sendBtnDisabled = disabled || loading || streaming || hasPendingImages;
+  // Send is allowed if there is any text or images, and no pending image loads and not loading/streaming/disabled
+  const sendAllowed =
+    (!disabled && !loading && !streaming && !hasPendingImages) &&
+    ((inputValue && inputValue.trim().length > 0) || images.filter(img => img.dataUrl && !img.error).length > 0);
+  const sendBtnDisabled = !sendAllowed;
   const messageInputError = error || imgError;
-  if (!conversation) {
-    // Starting a new conversation
-    return (
-      <section style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: 0,
-        background: '#fff'
-      }}>
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#b7bfcf',
-          fontSize: 22,
-          fontWeight: 500
-        }}>
-          Start a New Conversation
-        </div>
-        <MessageInput
-          value={inputValue}
-          onChange={onInputChange}
-          onSend={handleSendWithImages}
-          loading={loading || streaming}
-          disabled={disabled}
-          error={error}
-          placeholder={placeholder}
-        />
-      </section>
-    );
-  }
 
-  // Standard conversation view
-  const messages = conversation.messages || [];
+  // New or existing conversation: unified layout
+  const messages = conversation?.messages || [];
 
   return (
     <section style={{
@@ -141,6 +120,7 @@ export default function ConversationView({
       minHeight: 0,
       background: '#fff'
     }}>
+      {/* Display conversation messages if existing, or contextual "start a new conversation" when new */}
       <div style={{
         flex: 1,
         overflowY: 'auto',
@@ -149,7 +129,18 @@ export default function ConversationView({
         flexDirection: 'column',
         minHeight: 0
       }}>
-        {messages.length === 0 && (
+        {!conversation ? (
+          <div style={{
+            textAlign: 'center',
+            color: '#b7bfcf',
+            fontSize: 22,
+            fontWeight: 500,
+            margin: 0,
+            alignSelf: 'center'
+          }}>
+            Start a New Conversation
+          </div>
+        ) : (messages.length === 0 && (
           <div style={{
             textAlign: 'center',
             color: '#abb4c7',
@@ -159,8 +150,8 @@ export default function ConversationView({
           }}>
             No messages in this conversation yet.
           </div>
-        )}
-        {messages.map((msg, idx) => (
+        ))}
+        {conversation && messages.map((msg, idx) => (
           <MessageBubble
             key={idx}
             type={msg.type}
@@ -169,7 +160,7 @@ export default function ConversationView({
             label={msg.type === 'user' ? 'User' : 'Assistant'}
           />
         ))}
-        {streaming && (
+        {conversation && streaming && (
           <MessageBubble
             type="assistant"
             content={<span style={{ color: '#aaa' }}>Typing...</span>}
@@ -180,6 +171,7 @@ export default function ConversationView({
         )}
         <div ref={messagesEndRef} />
       </div>
+      {/* Always image upload + message input stack, regardless of new/existing */}
       <div style={{ borderTop: '1px solid #e3e6ea', background: '#fcfcfe', padding: '1em 1.2em 1em 1.3em' }}>
         <ImageUploadInput
           images={images}
@@ -593,9 +585,9 @@ function MessageInput({
               padding: '0.48em 1.35em',
               marginLeft: 'auto',
               cursor: loading || disabled ? 'default' : 'pointer',
-              opacity: loading || !value.trim() ? 0.6 : 1
+              opacity: loading || disabled ? 0.6 : 1
             }}
-            disabled={loading || disabled || !value.trim()}
+            disabled={loading || disabled}
           >
             {loading ? 'Sending...' : 'Send'}
           </button>
@@ -604,6 +596,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 

@@ -394,8 +394,28 @@ function App() {
             streaming={streaming}
             inputValue={inputValue}
             onInputChange={e => setInputValue(e.target.value)}
-            onSend={async () => {
-              // No-op in App. ConversationView handles message send and image upload state.
+            onSend={async (messageToSend, imagesToSend = []) => {
+              if (!socket) return;
+              // Compose send conditions:
+              // - Allow sending if message (nonempty trimmed string) OR if images has at least 1 valid entry
+              // (Do not allow send if both are empty, or if already loading, or convLoading, or streaming)
+              const trimmedMsg = typeof messageToSend === "string" ? messageToSend.trim() : "";
+              const hasText = trimmedMsg.length > 0;
+              const hasImages = Array.isArray(imagesToSend) && imagesToSend.length > 0;
+              if ((!hasText && !hasImages) || sendLoading || streaming || convLoading) {
+                // Should not happen, but guard
+                return;
+              }
+              if (!currentConv || !currentConv._id) return; // no conversation exists
+              setSendLoading(true);
+              setChatError('');
+              setStreaming(true); // expect stream
+              socket.emit('message', {
+                conversationId: currentConv._id,
+                message: trimmedMsg,
+                images: imagesToSend
+              });
+              setInputValue('');
             }}
             disabled={sendLoading || streaming || convLoading}
             placeholder="Type your message and hit Send…"
@@ -444,6 +464,8 @@ function App() {
 // If stream starts/ends normally, the input is already cleared.
 
 export default App;
+
+
 
 
 
