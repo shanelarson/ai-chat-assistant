@@ -172,39 +172,6 @@ export default function ConversationView({
       </div>
       {/* Always image upload + message input stack, regardless of new/existing */}
       <div style={{ borderTop: '1px solid #e3e6ea', background: '#fcfcfe', padding: '1em 1.2em 1em 1.3em' }}>
-        {/* Show preview of pending images if any, above the input and NOT as a message */}
-        {showPendingImagePreview && (
-          <div style={{
-            marginBottom: 10
-          }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {images
-                .filter(img => img.dataUrl && !img.error)
-                .map((img, idx) => (
-                  <div key={idx} style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center'
-                  }}>
-                    <img
-                      src={img.dataUrl}
-                      alt={img.file?.name || `Pending image ${idx + 1}`}
-                      style={{
-                        maxWidth: 120,
-                        maxHeight: 78,
-                        borderRadius: 7,
-                        border: '1.4px solid #dde3f3',
-                        marginBottom: 1,
-                        background: '#f7f9ff',
-                        objectFit: 'contain'
-                      }}
-                    />
-                    <div style={{
-                      maxWidth: 110, color: '#818193', fontSize: 10, textAlign: 'center'
-                    }}>{img.file?.name || ''}</div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
         <ImageUploadInput
           images={images}
           onChange={handleImageChange}
@@ -729,6 +696,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
