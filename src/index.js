@@ -29,7 +29,6 @@ app.use(cors({
   origin: CORS_ORIGIN,
   credentials: true
 }));
-
 // ---- Attach static UI (production only) ----
 if (NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'dist')));
@@ -45,6 +44,10 @@ if (NODE_ENV === 'production') {
 // ---- HTTP Endpoints ----
 app.post('/signup', signupHandler);
 app.post('/login', loginHandler);
+
+// --- Conversations API Endpoints ---
+import conversationsRouter from './httpEndpoints/conversations.js';
+app.use('/api/conversations', conversationsRouter);
 
 // ---- Example: Auth middleware for future endpoints ----
 /*
@@ -117,5 +120,6 @@ io.listen(SOCKET_IO_PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`[Socket.io] Real-time server listening on port ${SOCKET_IO_PORT}`);
 });
+
 
 
