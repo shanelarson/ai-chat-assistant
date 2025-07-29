@@ -23,7 +23,9 @@
     "github-markdown-css": "^5.2.0",
     "dotenv": "^16.3.2",
     "socket.io-client": "^4.7.3",
-    "html-webpack-plugin": "^5.5.0"
+    "html-webpack-plugin": "^5.5.0",
+    "style-loader": "^4.3.1",
+    "css-loader": "^6.8.1"
   },
   "devDependencies": {
     "@babel/core": "^7.23.5",
