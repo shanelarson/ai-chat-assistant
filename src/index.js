@@ -40,14 +40,19 @@ if (NODE_ENV === 'production') {
     res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
   });
 }
-
 // ---- HTTP Endpoints ----
-app.post('/signup', signupHandler);
-app.post('/login', loginHandler);
+app.post('/api/signup', signupHandler);
+app.post('/api/login', loginHandler);
 
 // --- Conversations API Endpoints ---
 import conversationsRouter from './httpEndpoints/conversations.js';
 app.use('/api/conversations', conversationsRouter);
+
+
+
+
+
+
 
 // ---- Example: Auth middleware for future endpoints ----
 /*
@@ -131,6 +136,7 @@ if (SOCKET_IO_PORT !== SERVER_PORT) {
     console.log(`[Socket.io CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
   });
 }
+
 
 
 
