@@ -84,7 +84,6 @@ const io = new SocketIOServer(server, {
 // Auth middleware for socket.io connections
 import { connectToMongo } from './functions/mongo.js';
 import jwt from 'jsonwebtoken';
-
 // Attach user object to socket after verifying JWT token
 io.use(async (socket, next) => {
   try {
@@ -100,24 +99,90 @@ io.use(async (socket, next) => {
       }
       return secret || 'dev_secret_key';
     })();
-    const decoded = jwt.verify(token, jwtSecret);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, jwtSecret);
+    } catch (e) {
+      // Log for debug purposes
+      // eslint-disable-next-line no-console
+      console.error('[SOCKET AUTH] JWT verify failed:', e, 'token:', token);
+      return next(new Error('Invalid or expired token'));
+    }
     // Check user exists and token is in user.tokens
     const db = await connectToMongo();
     const usersCol = db.collection('users');
-    const userDoc = await usersCol.findOne({
-      _id: db.bson
-        ? new db.bson.ObjectId(decoded.userId)
-        : decoded.userId,
-      email: decoded.email,
-      tokens: { $elemMatch: { $eq: token } }
-    });
-    if (!userDoc) return next(new Error('Invalid or expired token'));
+    let _id;
+    try {
+      // Always use ObjectId for Mongo user lookups
+      if (db.bson && decoded.userId && typeof decoded.userId === 'string' && decoded.userId.length === 24) {
+        _id = new db.bson.ObjectId(decoded.userId);
+      } else {
+        _id = decoded.userId;
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[SOCKET AUTH] Cannot parse userId:', decoded.userId, e);
+      return next(new Error('Malformed user id in token'));
+    }
+
+    let userDoc;
+    try {
+      userDoc = await usersCol.findOne({
+        _id,
+        email: decoded.email,
+        tokens: { $elemMatch: { $eq: token } }
+      });
+      if (!userDoc) {
+        // Retry without email match in case user changed email after token issued
+        userDoc = await usersCol.findOne({
+          _id,
+          tokens: { $elemMatch: { $eq: token } }
+        });
+        if (userDoc && userDoc.email !== decoded.email) {
+          // Invalidate this token for this user (user changed email)
+          await usersCol.updateOne(
+            { _id },
+            { $pull: { tokens: token } }
+          );
+          // eslint-disable-next-line no-console
+          console.error('[SOCKET AUTH] Email in token does not match email in DB; token removed.', {
+            userId: decoded.userId, email: decoded.email, dbEmail: userDoc.email, token
+          });
+          return next(new Error('Email changed. Please log in again.'));
+        }
+      }
+    } catch (dbErr) {
+      // eslint-disable-next-line no-console
+      console.error('[SOCKET AUTH] DB lookup error:', dbErr);
+      return next(new Error('Database error during authentication.'));
+    }
+    if (!userDoc) {
+      // Removed: do NOT indiscriminately prune tokens from all users!
+      // Only log for debug
+      // eslint-disable-next-line no-console
+      console.error('[SOCKET AUTH] Token did not match any user session:', {
+        userId: decoded.userId,
+        email: decoded.email,
+        token
+      });
+      return next(new Error('User not found or token revoked.'));
+    }
     socket.data.user = userDoc;
     next();
   } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[SOCKET AUTH] Unhandled error:', err);
     return next(new Error('Authentication failed'));
   }
 });
+
+
+
+
+
+
+
+
 
 // Register socket.io events
 
@@ -152,6 +217,7 @@ if (SOCKET_IO_PORT !== SERVER_PORT) {
     console.log(`[Socket.io CORS] Allowed origins: ${CORS_ORIGIN.join(', ')}`);
   });
 }
+
 
 
 

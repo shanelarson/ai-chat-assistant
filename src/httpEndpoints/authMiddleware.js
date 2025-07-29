@@ -31,51 +31,61 @@ export default async function authMiddleware(req, res, next) {
     } catch (err) {
       return res.status(401).json({ error: 'Invalid or expired token.' });
     }
-
-    // Look up user in DB and confirm token exists
+    // Look up user in DB and confirm token exists (force ObjectId for _id lookup)
     const db = await connectToMongo();
     const usersCol = db.collection('users');
-    // Defensive logging for debugging
+    const toObjectId = (id) => {
+      if (db.bson && (typeof id === 'string') && id.length === 24) return new db.bson.ObjectId(id);
+      return id;
+    };
     let user;
     try {
+      // Always force ObjectId for lookup on _id fields
       user = await usersCol.findOne({
-        _id: db.bson ? new db.bson.ObjectId(decoded.userId) : decoded.userId,
+        _id: toObjectId(decoded.userId),
         email: decoded.email,
         tokens: { $elemMatch: { $eq: token } }
       });
       if (!user) {
-        // Try again without email field in query; maybe email was changed
+        // Try again without email in query; maybe email was changed
         user = await usersCol.findOne({
-          _id: db.bson ? new db.bson.ObjectId(decoded.userId) : decoded.userId,
+          _id: toObjectId(decoded.userId),
           tokens: { $elemMatch: { $eq: token } }
         });
         if (user && user.email !== decoded.email) {
-          // UserId and token matched but email in DB does not match token
-          // (possibly a sign of user email change after issuance)
-          // Remove this token from the user, force re-login.
+          // UserId and token matched but email in DB does not match token (e.g., after email change)
+          // Remove this token from this user only (not globally)
           await usersCol.updateOne(
             { _id: user._id },
             { $pull: { tokens: token } }
           );
+          // Improved logging
+          // eslint-disable-next-line no-console
+          console.warn('[AUTH] Token revoked due to email change:', {
+            _id: user._id?.toString?.(),
+            dbEmail: user.email,
+            tokenEmail: decoded.email,
+            tokenValue: token
+          });
           return res.status(401).json({ error: 'Email changed. Please log in again.' });
         }
       }
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('Auth middleware DB lookup error:', e);
+      console.error('Auth middleware DB lookup error:', e, {
+        token: token,
+        decoded: decoded
+      });
       return res.status(500).json({ error: 'Database error during authentication.' });
     }
     if (!user) {
-      // Optionally: Clean up the stale token in all users (shouldn't occur in normal use)
-      // (Optional, can comment out if undesirable)
-      await usersCol.updateMany(
-        { tokens: { $elemMatch: { $eq: token } } },
-        { $pull: { tokens: token } }
-      );
+      // Do NOT remove the token globally from all users!
+      // Just log the failure for future debugging.
       // eslint-disable-next-line no-console
       console.error('[AUTH] Token in request did not match any valid user session:', {
-        userId: decoded.userId,
-        email: decoded.email
+        token: token,
+        decodedUserId: decoded?.userId,
+        decodedEmail: decoded?.email
       });
       return res.status(401).json({ error: 'User not found or token revoked.' });
     }
