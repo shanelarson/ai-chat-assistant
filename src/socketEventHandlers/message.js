@@ -103,97 +103,45 @@ export default async function handleMessage(socket, payload) {
       messages: openAIMessages,
       stream: true
     };
-    // OpenAI streaming using response.data as a readable stream
-    let response;
-    try {
-      response = await openai.chat.completions.create(
-        { ...completionOpts, stream: true },
-        { responseType: 'stream' }
-      );
-    } catch (apiErr) {
-      // eslint-disable-next-line no-console
-      console.error('OpenAI API create error:', apiErr);
-      socket.emit('errorMessage', { error: 'Error connecting to OpenAI: ' + (apiErr?.message || 'Unknown error') });
-      return;
-    }
+    // OpenAI 4.x streaming: async iterator over result chunks!
     let assistantMsg = '';
-    let messageId = null;
-
-    // Defensive: make sure response.data is a stream before using .on
-    if (!response || !response.data || typeof response.data.on !== 'function') {
-      // eslint-disable-next-line no-console
-      console.error(
-        'OpenAI API: response.data is not a stream',
-        {
-          responseType: typeof response,
-          hasData: !!response && !!response.data,
-          dataType: response && typeof response.data,
-          dataKeys: response && response.data ? Object.keys(response.data) : undefined,
-          // If possible, print error payload (for non-stream OpenAI error responses)
-          openaiError: response && response.data && response.data.error ? response.data.error : undefined,
-        }
+    try {
+      const stream = await openai.chat.completions.create(
+        { ...completionOpts, stream: true }
       );
-      socket.emit('errorMessage', {
-        error:
-          'Could not connect to OpenAI or stream response. Please try again. ' +
-          ((response && response.data && response.data.error && response.data.error.message)
-            ? `Upstream error: ${response.data.error.message}`
-            : ''
-          )
-      });
-      return;
-    }
-
-    response.data.on('data', async chunk => {
-      // Accumulate the result; parse lines
-      const lines = chunk
-        .toString('utf8')
-        .split('\n')
-        .filter(Boolean);
-
-      for (const line of lines) {
-        if (line.trim().startsWith('data:')) {
-          const data = line.replace(/^data:\s*/, '');
-          if (data === '[DONE]') {
-            // Store assistant message
-            if (assistantMsg) {
-              const assistantEntry = {
-                type: 'assistant',
-                content: assistantMsg,
-                createdAt: new Date()
-              };
-              // Update conversation with assistant message
-              await conversationsCol.updateOne(
-                { _id: conversation._id },
-                { $push: { messages: assistantEntry }, $set: { updatedAt: new Date() } }
-              );
-            }
-            socket.emit('messageStreamEnd', { conversationId });
-            return;
-          }
-          try {
-            const delta = JSON.parse(data);
-            const deltaContent =
-              delta.choices?.[0]?.delta?.content ?? '';
-            if (deltaContent) {
-              assistantMsg += deltaContent;
-              socket.emit('messageStreamChunk', {
-                conversationId,
-                chunk: deltaContent
-              });
-            }
-          } catch (e) {
-            // Invalid JSON (ignore)
-          }
+      // For OpenAI SDK 4.x, `stream` is an async iterable, not an HTTP stream.
+      for await (const delta of stream) {
+        // OpenAI result delta is an object with .choices[].delta.content
+        const deltaContent = delta.choices?.[0]?.delta?.content ?? '';
+        if (deltaContent) {
+          assistantMsg += deltaContent;
+          socket.emit('messageStreamChunk', {
+            conversationId,
+            chunk: deltaContent
+          });
         }
       }
-    });
-    response.data.on('end', () => {
+      // After stream done, push assistant message to DB if any content
+      if (assistantMsg) {
+        const assistantEntry = {
+          type: 'assistant',
+          content: assistantMsg,
+          createdAt: new Date()
+        };
+        await conversationsCol.updateOne(
+          { _id: conversation._id },
+          { $push: { messages: assistantEntry }, $set: { updatedAt: new Date() } }
+        );
+      }
       socket.emit('messageStreamEnd', { conversationId });
-    });
-    response.data.on('error', err => {
-      socket.emit('errorMessage', { error: 'Error streaming assistant response.' });
-    });
+    } catch (streamErr) {
+      // eslint-disable-next-line no-console
+      console.error('Error during streaming OpenAI completion:', streamErr);
+      socket.emit('errorMessage', {
+        error: 'Could not connect to OpenAI or stream response. Please try again. ' +
+          (streamErr?.message ? `Upstream error: ${streamErr.message}` : '')
+      });
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('Socket message handler error:', err);
