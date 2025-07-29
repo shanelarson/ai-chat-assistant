@@ -227,7 +227,6 @@ function MessageBubble({ type, content, streaming, label, pending }) {
   ) {
     normalizedContent = [content];
   }
-
   // 1. If Typing indicator, just show as before, not markdown
   if (typeof content !== 'string' && React.isValidElement(content)) {
     return (
@@ -276,7 +275,9 @@ function MessageBubble({ type, content, streaming, label, pending }) {
             </span>
           )}
         </div>
-        <div style={bubbleStyle}>{content}</div>
+        <div style={bubbleStyle}>
+          {React.isValidElement(content) ? content : null}
+        </div>
       </div>
     );
   }
@@ -339,10 +340,9 @@ function MessageBubble({ type, content, streaming, label, pending }) {
   }
   // 3. All other cases (finalized messages): render with markdown and code highlighting AND images if any
   let renderedContent;
-
   // Defensive multimodal rendering for OpenAI-style array content: [{type:..., ...}]
   if (Array.isArray(normalizedContent)) {
-    // Render image_url and text parts in order
+    // Defensive: Only render actual objects, don't pass objects as children.
     renderedContent = (
       <div>
         {normalizedContent.map((part, idx) => {
@@ -382,8 +382,11 @@ function MessageBubble({ type, content, streaming, label, pending }) {
                 text={part.text}
               />
             );
+          } else if (typeof part === 'string') {
+            return <span key={`text-string-${idx}`}>{part}</span>;
           } else {
-            // Defensive fallback: render as a string (or skip)
+            // Defensive fallback: render as a string or skip
+            // Will produce [object Object] if you reach here, so prefer null
             return null;
           }
         })}
@@ -508,6 +511,7 @@ function MessageBubble({ type, content, streaming, label, pending }) {
       <div style={bubbleStyle}>
         {renderedContent}
       </div>
+
 
 
 
@@ -726,6 +730,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
