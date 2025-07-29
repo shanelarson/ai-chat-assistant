@@ -97,7 +97,6 @@ export default async function handleMessage(socket, payload) {
       role: msg.type === 'user' ? 'user' : 'assistant',
       content: msg.content
     }));
-
     // Stream assistant response
     const completionOpts = {
       model: OPENAI_MODEL,
@@ -105,7 +104,10 @@ export default async function handleMessage(socket, payload) {
       stream: true
     };
     // OpenAI streaming using response.data as a readable stream
-    const response = await openai.createChatCompletion(completionOpts, { responseType: 'stream' });
+    const response = await openai.chat.completions.create(
+      { ...completionOpts, stream: true },
+      { responseType: 'stream' }
+    );
     let assistantMsg = '';
     let messageId = null;
 
@@ -168,4 +170,5 @@ export default async function handleMessage(socket, payload) {
 // Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
 // Event names must match between frontend and backend (see app.jsx and here).
 // See documentation for configuration of environment variables for CORS and ports.
+
 
