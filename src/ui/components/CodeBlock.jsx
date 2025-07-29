@@ -1,12 +1,11 @@
 import React, { useState, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
-import js from 'react-syntax-highlighter/dist/esm/languages/hljs/javascript';
-import ts from 'react-syntax-highlighter/dist/esm/languages/hljs/typescript';
-import jsx from 'react-syntax-highlighter/dist/esm/languages/hljs/jsx';
-import { github } from 'react-syntax-highlighter/dist/esm/styles/hljs';
-
-// Register languages only as needed for bundle size
+import js from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
+import ts from 'react-syntax-highlighter/dist/esm/languages/prism/typescript';
+import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
+import { coy as prismStyle } from 'react-syntax-highlighter/dist/esm/styles/prism';
+// Register Prism languages only as needed for bundle size (do NOT use HLJS imports; Prism supports JSX/TS)
 SyntaxHighlighter.registerLanguage('javascript', js);
 SyntaxHighlighter.registerLanguage('js', js);
 SyntaxHighlighter.registerLanguage('typescript', ts);
@@ -121,7 +120,7 @@ export default function CodeBlock({ value, language: languageProp, className }) 
         >
           <SyntaxHighlighter
             language={highlightLang || undefined}
-            style={github}
+            style={prismStyle}
             customStyle={{
               margin: 0,
               background: 'transparent',
@@ -180,3 +179,5 @@ CodeBlock.propTypes = {
   language: PropTypes.string,
   className: PropTypes.string,
 };
+
+
