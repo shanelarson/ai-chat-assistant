@@ -492,6 +492,7 @@ function App() {
                       }))
                     });
                     setInputValue('');
+                    setImages([]);
                     setPendingUserMsg({ ...pendingMsgObj, conversationId: newConv._id });
                   } else {
                     setChatError('Failed to create new conversation.');
@@ -659,6 +660,7 @@ function App() {
 // If stream starts/ends normally, the input is already cleared.
 export { }
 export default App;
+
 
 
 
