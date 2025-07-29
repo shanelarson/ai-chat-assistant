@@ -65,7 +65,8 @@ function App() {
     setLoginLoading(true);
     setLoginError('');
     try {
-      const res = await fetch(`${API_URL}/login`, {
+      // Use proxy path to avoid CORS in development
+      const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -89,7 +90,8 @@ function App() {
     setSignupLoading(true);
     setSignupError('');
     try {
-      const res = await fetch(`${API_URL}/signup`, {
+      // Use proxy path to avoid CORS in development
+      const res = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -231,7 +233,6 @@ function App() {
 
     // eslint-disable-next-line
   }, [loggedIn, token]);
-
   // --------------- Fetch conversations on login ---------------
   useEffect(() => {
     if (!loggedIn || !token) {
@@ -281,7 +282,6 @@ function App() {
     setSendLoading(false);
     setStreaming(false);
   }
-
   function handleStartNew() {
     // For now, create new empty conversation on backend
     setConvLoading(true);
@@ -417,5 +417,4 @@ function App() {
 // On successful message send and stream start (first chunk or streamEnd), clear inputValue (unless message was rejected)
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared, as designed.
-
 export default App;
