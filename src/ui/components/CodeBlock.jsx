@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import PropTypes from 'prop-types';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+// Use PrismLight for custom language registration (Prism default does not support registerLanguage)
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import js from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
 import ts from 'react-syntax-highlighter/dist/esm/languages/prism/typescript';
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
@@ -179,6 +180,7 @@ CodeBlock.propTypes = {
   language: PropTypes.string,
   className: PropTypes.string,
 };
+
 
 
 
