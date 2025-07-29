@@ -52,12 +52,20 @@ function App() {
     // Always prefix /api unless already present
     let proxiedUrl =
       url.startsWith('/api/') ? url : url.startsWith('/api') ? url : `/api${url.startsWith('/') ? url : '/' + url}`;
+    // Ensure we don't override Authorization accidentally and only set Content-Type for non-GET
+    const method = opts.method ? opts.method.toUpperCase() : 'GET';
+    const baseHeaders = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    // Only set Content-Type if not a GET
+    if (method !== 'GET' && method !== 'HEAD') {
+      baseHeaders['Content-Type'] = 'application/json';
+    }
     return fetch(proxiedUrl, {
       ...opts,
       headers: {
+        ...baseHeaders,
         ...(opts.headers || {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        'Content-Type': 'application/json'
       }
     });
   }, [token]);
@@ -420,5 +428,7 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
+
+
 
 
