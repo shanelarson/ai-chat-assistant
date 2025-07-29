@@ -332,7 +332,7 @@ function App() {
       return (
         <div style={{
           display: 'flex',
-          height: 'calc(100vh - 56px)',
+          height: 'calc(100vh - 73px)',
           width: '100vw',
           maxWidth: '100vw',
           overflow: 'hidden',
@@ -356,7 +356,7 @@ function App() {
       <div
         style={{
           display: 'flex',
-          height: 'calc(100vh - 56px)',
+          height: 'calc(100vh - 73px)',
           width: '100vw',
           maxWidth: '100vw',
           overflow: 'hidden',
@@ -448,6 +448,7 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
+
 
 
 
