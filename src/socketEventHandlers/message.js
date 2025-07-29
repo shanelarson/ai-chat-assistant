@@ -148,13 +148,8 @@ export default async function handleMessage(socket, payload) {
     const prevMessages = Array.isArray(conversation.messages)
       ? conversation.messages
       : [];
-
     // Build the user message: If images, use multimodal OpenAI format.
-    let userMsgForDb = {
-      type: 'user',
-      content: message,
-      createdAt: new Date()
-    };
+    let userMsgForDb;
     let openAIMsgContent;
     if (validatedImages.length > 0) {
       // OpenAI expects an array of content blocks for multimodal
@@ -166,34 +161,36 @@ export default async function handleMessage(socket, payload) {
         { type: 'text', text: message }
       ];
       userMsgForDb = {
-        ...userMsgForDb,
-        content: {
-          images: validatedImages,
-          text: message
-        }
+        type: 'user',
+        content: [
+          ...validatedImages.map(img => ({
+            type: 'image_url',
+            image_url: { url: img.url }
+          })),
+          { type: 'text', text: message }
+        ],
+        createdAt: new Date()
       };
     } else {
       openAIMsgContent = message;
+      userMsgForDb = {
+        type: 'user',
+        content: message,
+        createdAt: new Date()
+      };
     }
-    // NOTE: For storage, we do NOT persist images in DB (omit .images for persistence). But if audit/replay needed, could adjust above.
-    // By default, only persist the text.
+    // Persist both text and image data as `content` array if multimodal, or string if not.
     await conversationsCol.updateOne(
       { _id: conversation._id },
       {
         $push: {
-          messages: {
-            // Only text, do not store images in DB
-            type: 'user',
-            content: message,
-            createdAt: new Date()
-          }
+          messages: userMsgForDb
         },
         $set: { updatedAt: new Date() }
       }
     );
     // Set up request to OpenAI API (stream enabled)
     const openai = getOpenAIClient();
-
     // Assemble OpenAI messages history, but convert only the *latest* user message into multimodal syntax
     // All previous messages are plain text or array as received.
     const openAIMessages =
@@ -276,6 +273,7 @@ export default async function handleMessage(socket, payload) {
 // Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
 // Event names must match between frontend and backend (see app.jsx and here).
 // See documentation for configuration of environment variables for CORS and ports.
+
 
 
 

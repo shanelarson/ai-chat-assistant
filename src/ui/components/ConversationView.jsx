@@ -115,6 +115,8 @@ export default function ConversationView({
 
   // New or existing conversation: unified layout
   const messages = conversation?.messages || [];
+  // Determine if we're in "composing" mode for a new message with images (preview images above input)
+  const showPendingImagePreview = images.length > 0 && images.some(img => img.dataUrl && !img.error);
 
   return (
     <section style={{
@@ -177,6 +179,39 @@ export default function ConversationView({
       </div>
       {/* Always image upload + message input stack, regardless of new/existing */}
       <div style={{ borderTop: '1px solid #e3e6ea', background: '#fcfcfe', padding: '1em 1.2em 1em 1.3em' }}>
+        {/* Show preview of pending images if any, above the input and NOT as a message */}
+        {showPendingImagePreview && (
+          <div style={{
+            marginBottom: 10
+          }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {images
+                .filter(img => img.dataUrl && !img.error)
+                .map((img, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center'
+                  }}>
+                    <img
+                      src={img.dataUrl}
+                      alt={img.file?.name || `Pending image ${idx + 1}`}
+                      style={{
+                        maxWidth: 120,
+                        maxHeight: 78,
+                        borderRadius: 7,
+                        border: '1.4px solid #dde3f3',
+                        marginBottom: 1,
+                        background: '#f7f9ff',
+                        objectFit: 'contain'
+                      }}
+                    />
+                    <div style={{
+                      maxWidth: 110, color: '#818193', fontSize: 10, textAlign: 'center'
+                    }}>{img.file?.name || ''}</div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
         <ImageUploadInput
           images={images}
           onChange={handleImageChange}
@@ -351,6 +386,14 @@ function MessageBubble({ type, content, streaming, label }) {
         multimodalText += part.text;
       }
     }
+  } else if (content && typeof content === 'object' && content.images && Array.isArray(content.images)) {
+    // Support for "user" message with images and text (e.g., { images: [...], text: "..." }) from DB
+    multimodalImages = content.images.map(img => ({
+      url: img.url,
+      detail: img.detail,
+      description: img.description,
+    }));
+    multimodalText = content.text || '';
   }
 
   if (multimodalImages.length > 0) {
@@ -444,6 +487,11 @@ function MessageBubble({ type, content, streaming, label }) {
     </div>
   );
 }
+
+
+
+
+
 
 // Markdown+code highlighting for chat message bodies: extracted for use in multimodal
 function ChatMarkdownContent({ isUser, type, text }) {
@@ -629,6 +677,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
