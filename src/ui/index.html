@@ -29,16 +29,5 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module">
-      import React from "/src/ui/components/app.jsx";
-      import { createRoot } from "react-dom/client";
-
-      // Find element
-      const rootEl = document.getElementById("root");
-      if (rootEl) {
-        const root = createRoot(rootEl);
-        root.render(React.createElement(React.default || React));
-      }
-    </script>
   </body>
 </html>
