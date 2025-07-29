@@ -19,6 +19,16 @@ import ImageUploadInput from './ImageUploadInput.jsx';
  * - placeholder: string (optional)
  * - error: string/null (optional error to show)
  */
+/**
+ * Unified ConversationView for chat UI, with image upload.
+ * IMAGE STATE is now fully controlled by parent (App). This component receives:
+ * - images: current image file objects (see app.jsx state), each with dataUrl/type/name/size/error
+ * - onImageChange: handler to update images state
+ * - imageInputError: error string for images
+ * - hasPendingImages: bool, true if any attached image is still being encoded or has error
+ *
+ * This prevents desync and bugs where a stale image state disables/rejects send.
+ */
 export default function ConversationView({
   conversation,
   loading,
@@ -28,68 +38,22 @@ export default function ConversationView({
   onSend,
   disabled,
   placeholder,
-  error
+  error,
+  images = [],
+  onImageChange,
+  imageInputError = '',
+  hasPendingImages = false
 }) {
-  // All hooks must be called on every render before any return.
-  // For autoscroll to bottom on new message/stream
   const messagesEndRef = useRef(null);
-  // --- Images state for send box ---
-  const [images, setImages] = useState([]);
-  const [imgError, setImgError] = useState('');
-  // Synchronized: if inputValue changes after send, clear images
-  useEffect(() => {
-    if (!inputValue && images.length > 0) setImages([]);
-    // eslint-disable-next-line
-  }, [inputValue]);
   useEffect(() => {
     if (messagesEndRef.current) {
-      // Scroll to bottom on new messages/stream
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [conversation, streaming, inputValue]);
 
-  // Handler for image attachment change (reset imgError on change)
-  function handleImageChange(newImages) {
-    setImages(newImages);
-    setImgError('');
-  }
-
-  // Custom onSend with images
-  async function handleSendWithImages() {
-    // Frontend validation: all images must be valid, loaded, no error, < max
-    if (loading || streaming || disabled) return;
-    let firstError = null;
-    if (Array.isArray(images) && images.length > 0) {
-      if (images.length > 4) {
-        setImgError('You can attach up to 4 images.');
-        return;
-      }
-      for (let img of images) {
-        if (img.error) {
-          firstError = img.error;
-          break;
-        }
-        if (!/^data:image\//.test(img.dataUrl || '')) {
-          firstError = 'Attached file could not be read as an image.';
-          break;
-        }
-        if (!img.file) {
-          firstError = 'Unknown image error. Please remove and re-add.';
-          break;
-        }
-      }
-    }
-    if (firstError) {
-      setImgError(firstError);
-      return;
-    }
-    setImgError('');
-    // DEFER to onSend: pass images in custom event
-    if (typeof onSend === 'function') {
-      onSend(inputValue, Array.isArray(images) ? images : []);
-    }
-    // UI clears handled after success/error by parent
-  }
+  // Start: prevent send unless all images are loaded (no error, base64 present)
+  const sendBtnDisabled = disabled || loading || streaming || hasPendingImages;
+  const messageInputError = error || imageInputError;
 
   if (!conversation) {
     // Starting a new conversation
@@ -161,12 +125,10 @@ export default function ConversationView({
             type={msg.type}
             content={msg.content}
             index={idx}
-            // Label messages clearly as 'User' or 'Assistant'
             label={msg.type === 'user' ? 'User' : 'Assistant'}
           />
         ))}
-        {/* When AI is streaming in a reply, show feedback */}
-        {streaming &&
+        {streaming && (
           <MessageBubble
             type="assistant"
             content={<span style={{ color: '#aaa' }}>Typing...</span>}
@@ -174,23 +136,23 @@ export default function ConversationView({
             streaming
             label="Assistant"
           />
-        }
+        )}
         <div ref={messagesEndRef} />
       </div>
       <div style={{ borderTop: '1px solid #e3e6ea', background: '#fcfcfe', padding: '1em 1.2em 1em 1.3em' }}>
         <ImageUploadInput
           images={images}
-          onChange={handleImageChange}
+          onChange={onImageChange}
           loading={loading || streaming || disabled}
-          error={imgError}
+          error={imageInputError}
         />
         <MessageInput
           value={inputValue}
           onChange={onInputChange}
-          onSend={handleSendWithImages}
-          loading={loading || streaming}
-          disabled={disabled}
-          error={error}
+          onSend={onSend}
+          loading={loading || streaming || hasPendingImages}
+          disabled={sendBtnDisabled}
+          error={messageInputError}
           placeholder={placeholder}
         />
       </div>
@@ -601,5 +563,6 @@ function MessageInput({
     </form>
   );
 }
+
 
 

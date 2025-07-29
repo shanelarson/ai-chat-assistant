@@ -477,25 +477,39 @@ function App() {
             streaming={streaming}
             inputValue={inputValue}
             onInputChange={e => setInputValue(e.target.value)}
+            // Canonicalizes image state; disables Send if *any* image not loaded or errored
             onSend={async () => {
+              // Don't allow send if any images are still loading or errored
+              const hasPendingImages = imageUploads.some(
+                img => !img.dataUrl && !img.error
+              );
+              const hasErroredImages = imageUploads.some(img => img.error);
+              if (hasPendingImages) {
+                setImageInputError('Please wait for all images to finish uploading.');
+                return;
+              }
+              if (hasErroredImages) {
+                setImageInputError('Please remove or fix all errored images before sending.');
+                return;
+              }
               await handleSend();
               setInputValue('');
               setImageUploads([]);
             }}
-            disabled={sendLoading || streaming || convLoading}
-            placeholder="Type your message and hit Send…"
-            error={chatError}
-            renderImageUploadInput={
-              <ImageUploadInput
-                images={imageUploads}
-                onChange={imgs => {
-                  setImageUploads(imgs);
-                  setImageInputError('');
-                }}
-                loading={sendLoading || streaming}
-                error={imageInputError}
-              />
+            imageUploads={imageUploads}
+            onImagesChange={imgs => {
+              setImageUploads(imgs);
+              setImageInputError('');
+            }}
+            disabled={
+              sendLoading ||
+              streaming ||
+              convLoading ||
+              imageUploads.some(img => !img.dataUrl && !img.error) ||
+              imageUploads.some(img => img.error)
             }
+            placeholder="Type your message and hit Send…"
+            error={chatError || imageInputError}
           />
         </div>
       </div>
@@ -539,6 +553,7 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
+
 
 
 
