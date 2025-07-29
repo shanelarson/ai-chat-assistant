@@ -277,15 +277,15 @@ function MessageBubble({ type, content, streaming, label }) {
   try {
     renderedContent = (
       <div
-        className={
-          isUser
-            ? "markdown-body userBackgroundColor"
-            : "markdown-body assistantBackgroundColor"
-        }
+        className="markdown-body"
+        // Inline backgroundColor set here, previously from removed CSS classes userBackgroundColor and assistantBackgroundColor
         style={{
           userSelect: "text",
           margin: 0,
           wordBreak: "break-word",
+          backgroundColor: isUser
+            ? "rgb(228, 234, 255)"    // previously .userBackgroundColor
+            : "rgb(243, 246, 250)",   // previously .assistantBackgroundColor
         }}
         tabIndex={0}
       >
@@ -493,6 +493,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
