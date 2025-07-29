@@ -8,18 +8,18 @@ function getOpenAIClient() {
   const baseURL = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1';
   return new OpenAI({ apiKey, baseURL });
 }
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
-// Message event handler for Socket.IO server
-// Expects: { conversationId, message }
-// Emits: 
-//   - 'messageStreamChunk' { conversationId, chunk } as message streams in
-//   - 'messageStreamEnd' { conversationId } when done
-//   - 'errorMessage' { error } on error
-//   - 'messageRejected' { error, rejectedMessage, conversationId } if user sends another message before assistant reply
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4-vision-preview';
+
+// Supported image types for validation
+const SUPPORTED_IMAGE_TYPES = [
+  'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'
+];
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20MB per image
+const MAX_IMAGES = 4;
 
 export default async function handleMessage(socket, payload) {
   try {
-    const { conversationId, message } = payload || {};
+    const { conversationId, message, images } = payload || {};
     // Require user from socket data (populated during auth)
     const user = socket.data.user;
     if (!user || !user._id) {
@@ -30,6 +30,59 @@ export default async function handleMessage(socket, payload) {
       socket.emit('errorMessage', { error: 'Missing conversationId or message.' });
       return;
     }
+    // Validate images input if present
+    let validatedImages = [];
+    if (Array.isArray(images) && images.length > 0) {
+      if (images.length > MAX_IMAGES) {
+        socket.emit('errorMessage', {
+          error: `You can attach up to ${MAX_IMAGES} images per message.`
+        });
+        // Log this error for security/troubleshooting
+        // eslint-disable-next-line no-console
+        console.log(`[IMG VALIDATION] User ${user._id}: exceeded max image count: ${images.length}`);
+        return;
+      }
+      // Validate each image object
+      for (let i = 0; i < images.length; ++i) {
+        const img = images[i];
+        // Expected shape: { data: base64 string (with or without data:xxx prefix), type, name, size (optional) }
+        if (
+          !img ||
+          typeof img.data !== 'string' ||
+          !img.type ||
+          !SUPPORTED_IMAGE_TYPES.includes(img.type) ||
+          !/^data:image\/(png|jpeg|jpg|gif|webp);base64,/.test(img.data)
+        ) {
+          socket.emit('errorMessage', {
+            error: `Image #${i + 1} is not a valid supported image type (PNG, JPEG, GIF, WebP).`
+          });
+          // eslint-disable-next-line no-console
+          console.log(`[IMG VALIDATION] User ${user._id}: rejected image type/format for image #${i + 1}`);
+          return;
+        }
+        // Estimate true size in bytes: base64 uses ~4/3 overhead (ignore headers)
+        let base64Str = img.data;
+        const prefixLen = base64Str.indexOf('base64,');
+        if (prefixLen !== -1) base64Str = base64Str.slice(prefixLen + 'base64,'.length);
+        // Roughly: (len * 3/4) bytes
+        const approxSize = Math.floor(base64Str.length * 3 / 4);
+        if (approxSize > MAX_IMAGE_BYTES) {
+          socket.emit('errorMessage', {
+            error: `Image #${i + 1} is too large (max 20MB per image).`
+          });
+          // eslint-disable-next-line no-console
+          console.log(`[IMG VALIDATION] User ${user._id}: image too large for image #${i + 1}`);
+          return;
+        }
+        validatedImages.push({
+          url: img.data, // should be full data URL (already data:image/xxx;base64,...)
+          type: img.type,
+          name: img.name || `image${i + 1}`,
+          // could include description/caption if frontend supports it
+        });
+      }
+    }
+
     const db = await connectToMongo();
     const conversationsCol = db.collection('conversations');
 
@@ -58,7 +111,6 @@ export default async function handleMessage(socket, payload) {
     }
 
     // Active "awaiting AI response" block: check if last message is user with no assistant reply
-    // (if last message is user, do not accept new user message)
     const messagesArr = Array.isArray(conversation.messages) ? conversation.messages : [];
     if (
       messagesArr.length > 0 &&
@@ -72,46 +124,80 @@ export default async function handleMessage(socket, payload) {
       return;
     }
 
-    // Prepare previous messages
+    // Prepare previous messages (all but new user message)
     const prevMessages = Array.isArray(conversation.messages)
       ? conversation.messages
       : [];
-    const userMessage = {
+
+    // Build the user message: If images, use multimodal OpenAI format.
+    let userMsgForDb = {
       type: 'user',
       content: message,
       createdAt: new Date()
     };
-    const newMessages = [...prevMessages, userMessage];
-
-    // Update the conversation immediately with user message
+    let openAIMsgContent;
+    if (validatedImages.length > 0) {
+      // OpenAI expects an array of content blocks
+      // Optionally prepend a vision preamble ("Analyze these images and answer: ...")
+      openAIMsgContent = [
+        ...validatedImages.map(img => ({
+          type: 'image_url',
+          image_url: { url: img.url }
+        })),
+        { type: 'text', text: message }
+      ];
+      userMsgForDb = {
+        ...userMsgForDb,
+        content: {
+          images: validatedImages,
+          text: message
+        }
+      };
+    } else {
+      openAIMsgContent = message;
+    }
+    // NOTE: For storage, we do NOT persist images in DB (omit .images for persistence). But if audit/replay needed, could adjust above.
+    // By default, only persist the text.
     await conversationsCol.updateOne(
       { _id: conversation._id },
-      { $push: { messages: userMessage }, $set: { updatedAt: new Date() } }
+      {
+        $push: {
+          messages: {
+            // Only text, do not store images in DB
+            type: 'user',
+            content: message,
+            createdAt: new Date()
+          }
+        },
+        $set: { updatedAt: new Date() }
+      }
     );
 
     // Set up request to OpenAI API (stream enabled)
     const openai = getOpenAIClient();
 
-    // Create OpenAI compatible message array
-    const openAIMessages = newMessages.map(msg => ({
-      role: msg.type === 'user' ? 'user' : 'assistant',
-      content: msg.content
-    }));
-    // Stream assistant response
+    // Assemble OpenAI messages history, but convert only the *latest* user message into multimodal syntax
+    // All previous messages are plain text.
+    const openAIMessages =
+      prevMessages.map(msg => ({
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }))
+      .concat([{
+        role: 'user',
+        content: openAIMsgContent
+      }]);
     const completionOpts = {
       model: OPENAI_MODEL,
       messages: openAIMessages,
       stream: true
     };
-    // OpenAI 4.x streaming: async iterator over result chunks!
     let assistantMsg = '';
     try {
       const stream = await openai.chat.completions.create(
         { ...completionOpts, stream: true }
       );
-      // For OpenAI SDK 4.x, `stream` is an async iterable, not an HTTP stream.
       for await (const delta of stream) {
-        // OpenAI result delta is an object with .choices[].delta.content
         const deltaContent = delta.choices?.[0]?.delta?.content ?? '';
         if (deltaContent) {
           assistantMsg += deltaContent;
@@ -151,6 +237,4 @@ export default async function handleMessage(socket, payload) {
 // Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
 // Event names must match between frontend and backend (see app.jsx and here).
 // See documentation for configuration of environment variables for CORS and ports.
-
-
 

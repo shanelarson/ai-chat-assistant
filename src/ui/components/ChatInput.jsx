@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import ImageUploadInput from './ImageUploadInput.jsx';
 
 /**
  * ChatInput
  * Props:
  * - value: string (current textarea value)
  * - onChange: function(event)
+ * - onImagesChange: function(imagesArray)
  * - onSend: function() - called when send button is pressed
  * - loading: boolean (show loading/spinner state)
  * - disabled: boolean (completely disables input)
@@ -14,7 +16,8 @@ import React, { useState } from 'react';
 export default function ChatInput({
   value,
   onChange,
-  onSend,
+  images,
+  onImagesChange,
   loading,
   disabled,
   placeholder,
@@ -28,6 +31,17 @@ export default function ChatInput({
       }
     }
   }
+
+  // Floating "Send" function, so (optionally) images/captions could be supported in future.
+  function handleSendWrapper(e) {
+    e.preventDefault();
+    if (!loading && !disabled && value && value.trim()) {
+      if (typeof onSend === 'function') {
+        onSend();
+      }
+    }
+  }
+
   return (
     <form
       style={{
@@ -35,12 +49,15 @@ export default function ChatInput({
         padding: '1em 1.2em 1em 1.3em',
         background: '#fcfcfe'
       }}
-      onSubmit={e => {
-        e.preventDefault();
-        if (!loading && !disabled && value && value.trim()) onSend();
-      }}
+      onSubmit={handleSendWrapper}
       autoComplete="off"
     >
+      <ImageUploadInput
+        images={images}
+        onChange={onImagesChange}
+        loading={loading || disabled}
+        error={error}
+      />
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <textarea
           value={value}
@@ -64,11 +81,11 @@ export default function ChatInput({
           }}
         />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {error &&
+          {error && (
             <div style={{ color: '#e74c3c', fontSize: 14, fontWeight: 500 }}>
               {error}
             </div>
-          }
+          )}
           <button
             type="submit"
             style={{

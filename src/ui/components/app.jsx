@@ -4,6 +4,7 @@ import LoginModal from './LoginModal.jsx';
 import SignupModal from './SignupModal.jsx';
 import ConversationList from './ConversationList.jsx';
 import ConversationView from './ConversationView.jsx';
+import ImageUploadInput from './ImageUploadInput.jsx';
 // Endpoints/Socket URLs from env (.env/.env.example control these, see docs)
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'ws://localhost:4000';
@@ -27,12 +28,14 @@ function App() {
   const [convLoading, setConvLoading] = useState(false);
   const [selected, setSelected] = useState(null); // convo _id
   const [currentConv, setCurrentConv] = useState(null);
-
   // Chat input state
   const [inputValue, setInputValue] = useState('');
   const [sendLoading, setSendLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [chatError, setChatError] = useState('');
+  // Image upload state
+  const [imageUploads, setImageUploads] = useState([]); // {file, dataUrl, name, type, size, error}
+  const [imageInputError, setImageInputError] = useState('');
 
   // Socket
   const [socket, setSocket] = useState(null);
@@ -314,10 +317,33 @@ function App() {
   }
   // Send handler: handles both new and existing conversations when user presses Send.
   async function handleSend() {
-    if (sendLoading || streaming || !inputValue.trim() || convLoading) return; // prevent duplicates
+    if (sendLoading || streaming || (!inputValue.trim() && imageUploads.length === 0) || convLoading) return; // prevent duplicates, must have at least text or image
+    // Validate images before sending
+    // Ensure no in-progress images, and no errors (ImageUploadInput UI should have filtered, but check)
+    if (imageUploads.some(img => img.error || !img.dataUrl)) {
+      setImageInputError('Please remove invalid images before sending.');
+      setSendLoading(false);
+      setStreaming(false);
+      return;
+    }
     setSendLoading(true);
     setStreaming(true);
     setChatError('');
+    setImageInputError('');
+
+    // Compose images array for socket
+    let imagesPayload = [];
+    if (Array.isArray(imageUploads) && imageUploads.length > 0) {
+      imagesPayload = imageUploads
+        .filter(img => img.dataUrl && !img.error)
+        .map(img => ({
+          data: img.dataUrl,
+          type: img.type,
+          name: img.name,
+          size: img.size
+          // captions: can be extended if supporting per-image captions later
+        }));
+    }
 
     // If no conversation is selected (or it doesn't exist; i.e., new conversation), create it first, then send
     if (!currentConv) {
@@ -348,7 +374,8 @@ function App() {
           if (socket) {
             socket.emit('message', {
               conversationId: newConv._id,
-              message: inputValue
+              message: inputValue,
+              images: imagesPayload.length > 0 ? imagesPayload : undefined
             });
           }
         }, 0); // next tick, after UI state
@@ -360,18 +387,18 @@ function App() {
       }
     } else {
       // Existing conversation, use socket directly
-      if (!socket || !currentConv || !inputValue.trim()) {
+      if (!socket || !currentConv || (!inputValue.trim() && imagesPayload.length === 0)) {
         setSendLoading(false);
         setStreaming(false);
         return;
       }
       socket.emit('message', {
         conversationId: currentConv._id,
-        message: inputValue
+        message: inputValue,
+        images: imagesPayload.length > 0 ? imagesPayload : undefined
       });
     }
-    // Note: clearInputValue handled after stream start/accept.
-    // setInputValue(''); -- handled by ConversationView's onSend
+    // Note: input clearing is handled below after stream start/accept.
   }
   // Show main UI
   function renderMainContent() {
@@ -427,6 +454,7 @@ function App() {
             paddingRight: 20,
           }}
         >
+          {/* Compose new-UI chat input as stack: image upload, then text+send */}
           <ConversationView
             conversation={
               currentConv
@@ -449,13 +477,25 @@ function App() {
             streaming={streaming}
             inputValue={inputValue}
             onInputChange={e => setInputValue(e.target.value)}
-            onSend={() => {
-              handleSend();
+            onSend={async () => {
+              await handleSend();
               setInputValue('');
+              setImageUploads([]);
             }}
             disabled={sendLoading || streaming || convLoading}
             placeholder="Type your message and hit Send…"
             error={chatError}
+            renderImageUploadInput={
+              <ImageUploadInput
+                images={imageUploads}
+                onChange={imgs => {
+                  setImageUploads(imgs);
+                  setImageInputError('');
+                }}
+                loading={sendLoading || streaming}
+                error={imageInputError}
+              />
+            }
           />
         </div>
       </div>
@@ -499,6 +539,8 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
+
+
 
 
 

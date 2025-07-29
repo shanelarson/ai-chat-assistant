@@ -1,9 +1,10 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import 'github-markdown-css/github-markdown-light.css';
 import CodeBlock, { SUPPORTED_LANGS, getLanguage } from './CodeBlock';
+import ImageUploadInput from './ImageUploadInput.jsx';
 
 /**
  * ConversationView
@@ -75,6 +76,58 @@ export default function ConversationView({
 
   // Standard conversation view
   const messages = conversation.messages || [];
+  // --- Images state for send box ---
+  const [images, setImages] = useState([]);
+  const [imgError, setImgError] = useState('');
+  // Synchronized: if inputValue changes after send, clear images
+  useEffect(() => {
+    if (!inputValue && images.length > 0) setImages([]);
+    // eslint-disable-next-line
+  }, [inputValue]);
+
+  // Handler for image attachment change (reset imgError on change)
+  function handleImageChange(newImages) {
+    setImages(newImages);
+    setImgError('');
+  }
+
+  // Custom onSend with images
+  async function handleSendWithImages() {
+    // Frontend validation: all images must be valid, loaded, no error, < max
+    if (loading || streaming || disabled) return;
+    let firstError = null;
+    if (Array.isArray(images) && images.length > 0) {
+      if (images.length > 4) {
+        setImgError('You can attach up to 4 images.');
+        return;
+      }
+      for (let img of images) {
+        if (img.error) {
+          firstError = img.error;
+          break;
+        }
+        if (!/^data:image\//.test(img.dataUrl || '')) {
+          firstError = 'Attached file could not be read as an image.';
+          break;
+        }
+        if (!img.file) {
+          firstError = 'Unknown image error. Please remove and re-add.';
+          break;
+        }
+      }
+    }
+    if (firstError) {
+      setImgError(firstError);
+      return;
+    }
+    setImgError('');
+    // DEFER to onSend: pass images in custom event
+    if (typeof onSend === 'function') {
+      onSend(inputValue, Array.isArray(images) ? images : []);
+    }
+    // UI clears handled after success/error by parent
+  }
+
   return (
     <section style={{
       flex: 1,
@@ -124,15 +177,23 @@ export default function ConversationView({
         }
         <div ref={messagesEndRef} />
       </div>
-      <MessageInput
-        value={inputValue}
-        onChange={onInputChange}
-        onSend={onSend}
-        loading={loading || streaming}
-        disabled={disabled}
-        error={error}
-        placeholder={placeholder}
-      />
+      <div style={{ borderTop: '1px solid #e3e6ea', background: '#fcfcfe', padding: '1em 1.2em 1em 1.3em' }}>
+        <ImageUploadInput
+          images={images}
+          onChange={handleImageChange}
+          loading={loading || streaming || disabled}
+          error={imgError}
+        />
+        <MessageInput
+          value={inputValue}
+          onChange={onInputChange}
+          onSend={handleSendWithImages}
+          loading={loading || streaming}
+          disabled={disabled}
+          error={error}
+          placeholder={placeholder}
+        />
+      </div>
     </section>
   );
 }
@@ -272,79 +333,62 @@ function MessageBubble({ type, content, streaming, label }) {
       </div>
     );
   }
-  // 3. All other cases (finalized messages): render with markdown and code highlighting
+  // 3. All other cases (finalized messages): render with markdown and code highlighting AND images if any
   let renderedContent;
-  try {
-    const markdownClasses = [
-      "markdown-body",
-      isUser
-        ? "userBackgroundColor"
-        : type === "assistant"
-          ? "assistantBackgroundColor"
-          : ""
-    ].filter(Boolean).join(" ");
+  // If the content is an OpenAI multimodal array (images + text), handle!
+  let multimodalImages = [];
+  let multimodalText = '';
+  if (Array.isArray(content)) {
+    // OpenAI Vision format: array of { type: 'image_url' or 'text', ... }
+    for (const part of content) {
+      if (part.type === 'image_url' && part.image_url && part.image_url.url) {
+        multimodalImages.push({
+          url: part.image_url.url,
+          detail: part.image_url.detail,
+          description: (part.image_url.detail && typeof part.image_url.detail === 'string') ? part.image_url.detail : undefined,
+        });
+      } else if (part.type === 'text' && typeof part.text === 'string') {
+        multimodalText += part.text;
+      }
+    }
+  }
+
+  if (multimodalImages.length > 0) {
     renderedContent = (
-      <div
-        className={markdownClasses}
-        style={{
-          userSelect: "text",
-          margin: 0,
-          wordBreak: "break-word"
-        }}
-        tabIndex={0}
-      >
-        <ReactMarkdown
-          children={typeof content === 'string' ? content : String(content ?? '')}
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeSanitize]}
-          linkTarget="_blank"
-          components={{
-            a: ({ node, ...props }) => (
-              <a {...props} target="_blank" rel="noopener noreferrer">{props.children}</a>
-            ),
-            code({ node, inline, className, children, ...props }) {
-              let lang = getLanguage(className);
-              // If language not specified or blank, use javascript as default for block code
-              if (!inline && (!lang || lang.trim() === "")) {
-                lang = "javascript";
-              }
-              const isSupported = SUPPORTED_LANGS.includes(lang);
-              if (!inline && isSupported) {
-                const codeString = Array.isArray(children) ? children.join('') : String(children);
-                return <CodeBlock value={codeString} language={lang} className={className} />;
-              }
-              return (
-                <code className={className} style={{
-                  background: "#f6f8fa",
-                  borderRadius: 4,
-                  padding: inline ? "2px 4px" : "0.6em 1em",
-                  fontSize: 14,
-                  fontFamily: "Consolas, Fira Mono, monospace",
-                  display: inline ? "inline" : "block",
-                  wordBreak: "break-word",
-                  overflowX: "auto"
-                }} {...props}>
-                  {children}
-                </code>
-              );
-            }
-          }}
-        />
+      <div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 4, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          {multimodalImages.map((img, idx) => (
+            <div key={idx} style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center'
+            }}>
+              <img
+                src={img.url}
+                alt={img.description || `Attachment ${idx + 1}`}
+                style={{
+                  maxWidth: 120,
+                  maxHeight: 78,
+                  borderRadius: 7,
+                  border: '1.4px solid #dde3f3',
+                  marginBottom: 2,
+                  background: '#f7f9ff',
+                  objectFit: 'contain'
+                }}
+              />
+              {img.description && (
+                <div style={{
+                  maxWidth: 110, color: '#818193', fontSize: 10, textAlign: 'center'
+                }}>{img.description}</div>
+              )}
+            </div>
+          ))}
+        </div>
+        <ChatMarkdownContent isUser={isUser} type={type} text={multimodalText} />
       </div>
     );
-  } catch (err) {
-    // Fallback: render safe pre block
+  } else {
+    // Single string or legacy text message
     renderedContent = (
-      <pre style={{
-        margin: 0,
-        fontSize: 15,
-        fontFamily: "inherit",
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-        color: "#b80024"
-      }}>
-        {typeof content === 'string' ? content : String(content ?? '')}
-      </pre>
+      <ChatMarkdownContent isUser={isUser} type={type} text={typeof content === 'string' ? content : String(content ?? '')} />
     );
   }
 
@@ -401,19 +445,84 @@ function MessageBubble({ type, content, streaming, label }) {
   );
 }
 
+// Markdown+code highlighting for chat message bodies: extracted for use in multimodal
+function ChatMarkdownContent({ isUser, type, text }) {
+  let renderedContent;
+  try {
+    const markdownClasses = [
+      "markdown-body",
+      isUser
+        ? "userBackgroundColor"
+        : type === "assistant"
+          ? "assistantBackgroundColor"
+          : ""
+    ].filter(Boolean).join(" ");
+    renderedContent = (
+      <div
+        className={markdownClasses}
+        style={{
+          userSelect: "text",
+          margin: 0,
+          wordBreak: "break-word"
+        }}
+        tabIndex={0}
+      >
+        <ReactMarkdown
+          children={typeof text === 'string' ? text : String(text ?? '')}
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeSanitize]}
+          linkTarget="_blank"
+          components={{
+            a: ({ node, ...props }) => (
+              <a {...props} target="_blank" rel="noopener noreferrer">{props.children}</a>
+            ),
+            code({ node, inline, className, children, ...props }) {
+              let lang = getLanguage(className);
+              if (!inline && (!lang || lang.trim() === "")) {
+                lang = "javascript";
+              }
+              const isSupported = SUPPORTED_LANGS.includes(lang);
+              if (!inline && isSupported) {
+                const codeString = Array.isArray(children) ? children.join('') : String(children);
+                return <CodeBlock value={codeString} language={lang} className={className} />;
+              }
+              return (
+                <code className={className} style={{
+                  background: "#f6f8fa",
+                  borderRadius: 4,
+                  padding: inline ? "2px 4px" : "0.6em 1em",
+                  fontSize: 14,
+                  fontFamily: "Consolas, Fira Mono, monospace",
+                  display: inline ? "inline" : "block",
+                  wordBreak: "break-word",
+                  overflowX: "auto"
+                }} {...props}>
+                  {children}
+                </code>
+              );
+            }
+          }}
+        />
+      </div>
+    );
+  } catch (err) {
+    renderedContent = (
+      <pre style={{
+        margin: 0,
+        fontSize: 15,
+        fontFamily: "inherit",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        color: "#b80024"
+      }}>
+        {typeof text === 'string' ? text : String(text ?? '')}
+      </pre>
+    );
+  }
+  return renderedContent;
+}
 
-
-
-
-
-
-
-
-
-
-
-
-// Renders text input (fixed bottom) for new message
+// Renders text input ONLY (for composition area, used below images)
 function MessageInput({
   value,
   onChange,
@@ -423,7 +532,6 @@ function MessageInput({
   error,
   placeholder
 }) {
-  // Allow send on Ctrl+Enter or Cmd+Enter, or button click
   function handleKeyDown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -432,11 +540,7 @@ function MessageInput({
   }
   return (
     <form
-      style={{
-        borderTop: '1px solid #e3e6ea',
-        padding: '1em 1.2em 1em 1.3em',
-        background: '#fcfcfe'
-      }}
+      style={{ margin: 0, padding: 0 }}
       onSubmit={e => {
         e.preventDefault();
         if (!loading && value && value.trim()) onSend();
@@ -497,15 +601,4 @@ function MessageInput({
     </form>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
 
