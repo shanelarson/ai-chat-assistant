@@ -377,16 +377,33 @@ function App() {
               currentConv
                 ? {
                     ...currentConv,
-                    messages: [
-                      ...(currentConv.messages || []),
-                      ...(currentConv.streamingAssistantMsg
-                        ? [{
-                            type: 'assistant',
-                            content: currentConv.streamingAssistantMsg,
-                            createdAt: new Date()
-                          }]
-                        : [])
-                    ]
+                    messages: (() => {
+                      // Compose the local user message to show "optimistically" in the UI immediately when Send is pressed.
+                      // We need to build the pending user message and add it only until we get a new message from the backend.
+                      // We'll store the pending message in a ref (state) here so it can be rendered until replaced by backend data.
+                      // This will be managed below via state: pendingUserMsg
+                      return [
+                        ...(currentConv.messages || []),
+                        ...(pendingUserMsg &&
+                            pendingUserMsg.conversationId === currentConv._id &&
+                            !(
+                              currentConv.messages &&
+                              currentConv.messages.length > 0 &&
+                              currentConv.messages[currentConv.messages.length - 1].createdAt ===
+                                pendingUserMsg.createdAt
+                            )
+                          ? [pendingUserMsg]
+                          : []
+                        ),
+                        ...(currentConv.streamingAssistantMsg
+                          ? [{
+                              type: 'assistant',
+                              content: currentConv.streamingAssistantMsg,
+                              createdAt: new Date()
+                            }]
+                          : []),
+                      ];
+                    })(),
                   }
                 : null
             }
@@ -407,12 +424,33 @@ function App() {
               if (sendLoading || streaming || convLoading) {
                 return;
               }
+              // Compose the message in the correct structure (OpenAI multimodal format or string)
+              let userMsgContent;
+              if (hasImages) {
+                userMsgContent = [
+                  ...imagesToSend.map(img => ({
+                    type: 'image_url',
+                    image_url: { url: img.data }
+                  })),
+                  { type: 'text', text: trimmedMsg }
+                ];
+              } else {
+                userMsgContent = trimmedMsg;
+              }
+              const now = new Date();
+              const pendingMsgObj = {
+                type: 'user',
+                content: userMsgContent,
+                createdAt: now,
+                pending: true,
+                conversationId: currentConv && currentConv._id
+              };
+              setPendingUserMsg(pendingMsgObj);
               // If no conversation selected (starting new), create one and send the message
               if (!currentConv || !currentConv._id) {
                 setSendLoading(true);
                 setChatError('');
                 setStreaming(false);
-                // Create new conversation, then send
                 try {
                   const res = await apiFetch('/conversations', {
                     method: 'POST',
@@ -439,6 +477,7 @@ function App() {
                 } finally {
                   setSendLoading(false);
                 }
+                setPendingUserMsg(null);
                 return;
               }
               // Existing conversation: send as normal
@@ -455,11 +494,51 @@ function App() {
             disabled={sendLoading || streaming || convLoading}
             placeholder="Type your message and hit Send…"
             error={chatError}
+            // Pass a prop to clear the pending UI message upon backend update (see useEffect below)
           />
         </div>
       </div>
     );
   }
+  // state: for optimistic pending message display
+  const [pendingUserMsg, setPendingUserMsg] = useState(null);
+  // Remove the pending user message when a new message comes in from backend
+  useEffect(() => {
+    if (!pendingUserMsg) return;
+    // If latest message in currentConv matches the text/images/timestamp, clear pending
+    if (
+      currentConv &&
+      currentConv.messages &&
+      currentConv.messages.length > 0
+    ) {
+      const lastMsg = currentConv.messages[currentConv.messages.length - 1];
+      // Compare by content and timestamp (to be conservative)
+      if (
+        lastMsg.type === "user" &&
+        ((typeof lastMsg.content === "string" &&
+          typeof pendingUserMsg.content === "string" &&
+          lastMsg.content === pendingUserMsg.content) ||
+         (Array.isArray(lastMsg.content) &&
+          Array.isArray(pendingUserMsg.content) &&
+          lastMsg.content.length === pendingUserMsg.content.length)) &&
+        !pendingUserMsg.pending
+      ) {
+        setPendingUserMsg(null);
+      }
+      // Or just whenever backend message arrives, clear the pending
+      if (
+        lastMsg.type === "user" &&
+        lastMsg.createdAt &&
+        pendingUserMsg.createdAt &&
+        new Date(lastMsg.createdAt).getTime() >= new Date(pendingUserMsg.createdAt).getTime()
+      ) {
+        setPendingUserMsg(null);
+      }
+    }
+    // Also clear if a new conversation is selected
+    // Or on successful assistant message etc
+  }, [currentConv && currentConv.messages && currentConv.messages.length, currentConv && currentConv._id, pendingUserMsg]);
+
   // -------- Main App Render ---------
   return (
     <>
@@ -509,3 +588,4 @@ export default App;
 
 
  
+

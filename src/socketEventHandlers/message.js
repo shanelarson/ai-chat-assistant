@@ -27,7 +27,8 @@ export default async function handleMessage(socket, payload) {
       socket.emit('errorMessage', { error: 'Not authorized.' });
       return;
     }
-    if (!conversationId || typeof message !== 'string' || !message.trim()) {
+    // Accept messages that are image-only or text-only or both.
+    if (!conversationId || (typeof message !== 'string' && !Array.isArray(images)) || (!message.trim() && (!images || !images.length))) {
       socket.emit('errorMessage', { error: 'Missing conversationId or message.' });
       return;
     }
@@ -152,23 +153,21 @@ export default async function handleMessage(socket, payload) {
     let userMsgForDb;
     let openAIMsgContent;
     if (validatedImages.length > 0) {
-      // OpenAI expects an array of content blocks for multimodal
-      openAIMsgContent = [
+      // OpenAI expects an array of content blocks for multimodal.
+      // If user provided only images and no text, do not add 'text' block.
+      let contentArray = [
         ...validatedImages.map(img => ({
           type: 'image_url',
           image_url: { url: img.url }
-        })),
-        { type: 'text', text: message }
+        }))
       ];
+      if (typeof message === 'string' && message.trim() !== "") {
+        contentArray.push({ type: 'text', text: message });
+      }
+      openAIMsgContent = contentArray;
       userMsgForDb = {
         type: 'user',
-        content: [
-          ...validatedImages.map(img => ({
-            type: 'image_url',
-            image_url: { url: img.url }
-          })),
-          { type: 'text', text: message }
-        ],
+        content: contentArray,
         createdAt: new Date()
       };
     } else {
@@ -275,4 +274,3 @@ export default async function handleMessage(socket, payload) {
 // Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
 // Event names must match between frontend and backend (see app.jsx and here).
 // See documentation for configuration of environment variables for CORS and ports.
-

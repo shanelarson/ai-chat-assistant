@@ -49,15 +49,15 @@ export default function ConversationView({
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [conversation, streaming, inputValue]);
-
   // Handler for image attachment change (reset imgError on change)
   function handleImageChange(newImages) {
     setImages(newImages);
     setImgError('');
   }
+  // -- PATCH: To insert user message (optimistic) before backend response --
+  const [pendingUserMessage, setPendingUserMessage] = useState(null);
   // Custom onSend with images
   async function handleSendWithImages() {
-    // Frontend validation: all images must be valid, loaded, no error, < max
     if (loading || streaming || disabled) return;
     let firstError = null;
     if (Array.isArray(images) && images.length > 0) {
@@ -85,8 +85,7 @@ export default function ConversationView({
       return;
     }
     setImgError('');
-    // DEFER to onSend: pass images in custom event
-    // Always pass both text and image data array
+    // Pass both text and image data array
     const imagePayload = images
       .filter(img => img.dataUrl && !img.error)
       .map(img => ({
@@ -95,28 +94,43 @@ export default function ConversationView({
         name: img.file?.name || '',
         size: img.file?.size || undefined
       }));
-    if (typeof onSend === 'function') {
-      onSend(inputValue, imagePayload);
+    // Optimistically insert the pending user message in the UI before backend response
+    let newMsg;
+    if (imagePayload.length > 0) {
+      // OpenAI multimodal array: images then text
+      const contentArr = [
+        ...imagePayload.map(img => ({
+          type: 'image_url',
+          image_url: { url: img.data }
+        })),
+        { type: 'text', text: inputValue }
+      ];
+      newMsg = {
+        type: 'user',
+        content: contentArr,
+        createdAt: new Date()
+      };
+    } else {
+      newMsg = { type: 'user', content: inputValue, createdAt: new Date() };
     }
-    // UI clears handled after success/error by parent
+    setPendingUserMessage(newMsg);
+    if (typeof onSend === 'function') {
+      onSend(inputValue, imagePayload, { optimisticMsg: newMsg });
+    }
+    // Images preview bar will disappear (because inputValue is cleared on send by parent, which resets images via useEffect above)
   }
-  // Start: prevent send unless all images are loaded (no error, base64 present)
   const hasPendingImages = Array.isArray(images) && images.some(img => (!img.dataUrl && !img.error) || img.error);
-  // Determine if there is a valid image (fully loaded, no error)
   const validImageCount = images.filter(img => img.dataUrl && !img.error).length;
-  // Send is allowed if there is any text or images, and no pending image loads and not loading/streaming/disabled
-  // NOTE: Remove coupling between message input "disabled" & presence of images
   const sendAllowed =
     (!disabled && !loading && !streaming && !hasPendingImages) &&
     ((inputValue && inputValue.trim().length > 0) || validImageCount > 0);
-  const sendBtnDisabled = !sendAllowed;
   // Always keep message field enabled unless explicitly disabled or loading. Only error state disables send.
   let messageInputError = error || imgError;
-
   // New or existing conversation: unified layout
-  const messages = conversation?.messages || [];
-  // Determine if we're in "composing" mode for a new message with images (preview images above input)
-  const showPendingImagePreview = images.length > 0 && images.some(img => img.dataUrl && !img.error);
+  let messages = conversation?.messages || [];
+  // showPendingImagePreview: ONLY above the upload, not after send!
+  // As soon as user hits Send, images/images+text are no longer shown in preview--but instead inside the pending user message in chat.
+  const showPendingImagePreview = (images.length > 0 && images.some(img => img.dataUrl && !img.error) && !pendingUserMessage);
 
   return (
     <section style={{
@@ -157,26 +171,35 @@ export default function ConversationView({
             No messages in this conversation yet.
           </div>
         ))}
-        {conversation && Array.isArray(messages) && messages.length > 0 && messages.map((msg, idx) => {
-          // Defensive: Always expect object form with type/content
-          const type = msg.type || (msg.role === 'assistant' ? 'assistant' : 'user');
-          let content = msg.content;
-          // For legacy: if user message is string, wrap as text
-          if (type === 'user' && typeof content === 'string') {
-            content = content;
-          }
-          // For messages with multimodal images from old data shape: 
-          // handled in MessageBubble below (object/array).
-          return (
-            <MessageBubble
-              key={idx}
-              type={type}
-              content={content}
-              index={idx}
-              label={type === 'user' ? 'User' : 'Assistant'}
-            />
-          );
-        })}
+        {/* Show Optimistic/pending user message if present (inserted immediately after send, not yet confirmed by backend).
+            It is placed after the last user/assistant, so the assistant stream follows after. */}
+        {conversation && Array.isArray(messages) && messages.length > 0 && (
+          <>
+            {messages.map((msg, idx) => {
+              // Defensive: Always expect object form with type/content
+              const type = msg.type || (msg.role === 'assistant' ? 'assistant' : 'user');
+              let content = msg.content;
+              return (
+                <MessageBubble
+                  key={idx}
+                  type={type}
+                  content={content}
+                  index={idx}
+                  label={type === 'user' ? 'User' : 'Assistant'}
+                />
+              );
+            })}
+            {/* Show pending user message (only if it is the most recent message and not already present in the list) */}
+            {pendingUserMessage && (
+              <MessageBubble
+                key="pending-user"
+                type="user"
+                content={pendingUserMessage.content}
+                label="User"
+              />
+            )}
+          </>
+        )}
         {conversation && streaming && (
           <MessageBubble
             type="assistant"
@@ -239,6 +262,27 @@ export default function ConversationView({
           error={messageInputError}
           placeholder={placeholder}
         />
+  // When conversation.messages or inputValue change, clear the pendingUserMessage
+  useEffect(() => {
+    // When the backend appends a user message, remove the optimistic one
+    if (pendingUserMessage) {
+      // If there is a match for pendingUserMessage in messages, clear our pending since it's now reflected from backend
+      // (do a match by type:user, content is the same array structure/text, and createdAt ~equal allowed, but simplest: just clear if last is user)
+      if (
+        Array.isArray(messages) &&
+        messages.length > 0 &&
+        messages[messages.length - 1].type === "user"
+      ) {
+        setPendingUserMessage(null);
+      }
+    }
+    // Also: if inputValue changes and is now non-empty (user started typing again after previous send), clear
+    // Defensive: if user edits inputValue, clear the pending preview
+    if (pendingUserMessage && inputValue !== '') {
+      setPendingUserMessage(null);
+    }
+  }, [messages, inputValue]);
+
       </div>
     </section>
   );
@@ -693,6 +737,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
