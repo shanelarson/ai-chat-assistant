@@ -428,10 +428,12 @@ function App() {
               let userMsgContent;
               if (hasImages) {
                 // Always multimodal array for images (and possible text block)
+                // For each image, ensure we send a data URL string (data:image/xxx;base64,...) in the 'data' property
                 userMsgContent = [
                   ...imagesToSend.map(img => ({
                     type: 'image_url',
-                    image_url: { url: img.data }
+                    // Use 'img.dataUrl' if present, else fallback to 'img.data', else empty
+                    image_url: { url: img.dataUrl || img.data || '' }
                   })),
                   ...(hasText ? [{ type: 'text', text: trimmedMsg }] : [])
                 ];
@@ -470,7 +472,12 @@ function App() {
                     socket.emit('message', {
                       conversationId: newConv._id,
                       message: trimmedMsg,
-                      images: imagesToSend
+                      images: imagesToSend.map(img => ({
+                        data: img.dataUrl || img.data || '',
+                        type: img.type || img.file?.type || '',
+                        name: img.name || img.file?.name || '',
+                        size: img.size || img.file?.size
+                      }))
                     });
                     setInputValue('');
                     // Attach conversationId to pendingUserMsg so React knows which convo it's now part of
@@ -492,7 +499,12 @@ function App() {
               socket.emit('message', {
                 conversationId: currentConv._id,
                 message: trimmedMsg,
-                images: imagesToSend
+                images: imagesToSend.map(img => ({
+                  data: img.dataUrl || img.data || '',
+                  type: img.type || img.file?.type || '',
+                  name: img.name || img.file?.name || '',
+                  size: img.size || img.file?.size
+                }))
               });
               setInputValue('');
               setPendingUserMsg({ ...pendingMsgObj, conversationId: currentConv._id });
@@ -625,6 +637,7 @@ export default App;
 
 
  
+
 
 
 

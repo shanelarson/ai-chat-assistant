@@ -401,19 +401,41 @@ function MessageBubble({ type, content, streaming, label, pending }) {
             <div key={idx} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center'
             }}>
-              <img
-                src={img.url}
-                alt={img.description || `Attachment ${idx + 1}`}
-                style={{
-                  maxWidth: 120,
-                  maxHeight: 78,
-                  borderRadius: 7,
-                  border: '1.4px solid #dde3f3',
-                  marginBottom: 2,
-                  background: '#f7f9ff',
-                  objectFit: 'contain'
-                }}
-              />
+              {/* Distinguish between base64 data URL and external URL for safety. */}
+              {img.url && typeof img.url === "string" && img.url.startsWith("data:image/") ? (
+                <img
+                  src={img.url}
+                  alt={img.description || `Attachment ${idx + 1}`}
+                  style={{
+                    maxWidth: 120,
+                    maxHeight: 78,
+                    borderRadius: 7,
+                    border: '1.4px solid #dde3f3',
+                    marginBottom: 2,
+                    background: '#f7f9ff',
+                    objectFit: 'contain'
+                  }}
+                />
+              ) : (
+                // If it's not a base64 image, render as external img or fallback (for future external img support)
+                img.url ? (
+                  <img
+                    src={img.url}
+                    alt={img.description || `Attachment ${idx + 1}`}
+                    style={{
+                      maxWidth: 120,
+                      maxHeight: 78,
+                      borderRadius: 7,
+                      border: '1.4px solid #dde3f3',
+                      marginBottom: 2,
+                      background: '#fafbfe',
+                      objectFit: 'contain'
+                    }}
+                  />
+                ) : (
+                  <span style={{ color: '#c95f24', fontSize: 22 }}>Broken image</span>
+                )
+              )}
               {img.description && (
                 <div style={{
                   maxWidth: 110, color: '#818193', fontSize: 10, textAlign: 'center'
@@ -489,6 +511,16 @@ function MessageBubble({ type, content, streaming, label, pending }) {
       <div style={bubbleStyle}>
         {renderedContent}
       </div>
+
+
+
+
+
+
+ 
+
+
+
 
 
 
@@ -697,6 +729,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 

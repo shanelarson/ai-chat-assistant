@@ -76,10 +76,16 @@ export default function ImageUploadInput({
       const reader = new FileReader();
       reader.onload = e => {
         const dataUrl = e.target.result;
-        // Validate magic bytes (optional, but here as defense in depth)
-        // For brevity, skip strict checks; accept if browser loaded
-        // Patch in data URL
-        img.dataUrl = dataUrl;
+        // Ensure the DataURL includes the full data:image/xxx;base64, prefix
+        if (
+          typeof dataUrl === "string" &&
+          /^data:image\/(png|jpeg|jpg|gif|webp);base64,/.test(dataUrl)
+        ) {
+          img.dataUrl = dataUrl;
+        } else {
+          img.dataUrl = '';
+          img.error = 'Could not convert image to valid PNG, JPEG, GIF, or WebP base64 format.';
+        }
         safePropagateChange();
       };
       reader.onerror = () => {
@@ -258,21 +264,26 @@ export default function ImageUploadInput({
                 marginBottom: 2,
                 position: 'relative'
               }}>
-                {img.dataUrl && !img.error ? (
-                  <img
-                    src={img.dataUrl}
-                    alt={img.file?.name || 'Attachment'}
-                    style={{
-                      maxWidth: '100%',
-                      maxHeight: 53,
-                      objectFit: 'contain',
-                      background: '#f9fbff',
-                      borderRadius: 5
-                    }}
-                  />
-                ) : (
-                  <span style={{ color: '#c95f24', fontSize: 21 }}>!</span>
-                )}
+                {/* Only display if base64 DataURL, otherwise show error icon */}
+                {
+                  img.dataUrl && !img.error && img.dataUrl.startsWith('data:image/')
+                  ? (
+                    <img
+                      src={img.dataUrl}
+                      alt={img.file?.name || 'Attachment'}
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: 53,
+                        objectFit: 'contain',
+                        background: '#f9fbff',
+                        borderRadius: 5
+                      }}
+                    />
+                  )
+                  : (
+                    <span style={{ color: '#c95f24', fontSize: 21 }}>!</span>
+                  )
+                }
                 <button
                   type="button"
                   tabIndex={-1}
@@ -319,7 +330,6 @@ export default function ImageUploadInput({
     </div>
   );
 }
-
 // Optional: PropTypes validation to help catch development misuse
 /*
 import PropTypes from 'prop-types';
