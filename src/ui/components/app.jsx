@@ -33,9 +33,6 @@ function App() {
   const [sendLoading, setSendLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [chatError, setChatError] = useState('');
-  // Image upload state
-  const [imageUploads, setImageUploads] = useState([]); // {file, dataUrl, name, type, size, error}
-  const [imageInputError, setImageInputError] = useState('');
 
   // Socket
   const [socket, setSocket] = useState(null);
@@ -317,88 +314,8 @@ function App() {
   }
   // Send handler: handles both new and existing conversations when user presses Send.
   async function handleSend() {
-    if (sendLoading || streaming || (!inputValue.trim() && imageUploads.length === 0) || convLoading) return; // prevent duplicates, must have at least text or image
-    // Validate images before sending
-    // Ensure no in-progress images, and no errors (ImageUploadInput UI should have filtered, but check)
-    if (imageUploads.some(img => img.error || !img.dataUrl)) {
-      setImageInputError('Please remove invalid images before sending.');
-      setSendLoading(false);
-      setStreaming(false);
-      return;
-    }
-    setSendLoading(true);
-    setStreaming(true);
-    setChatError('');
-    setImageInputError('');
-
-    // Compose images array for socket
-    let imagesPayload = [];
-    if (Array.isArray(imageUploads) && imageUploads.length > 0) {
-      imagesPayload = imageUploads
-        .filter(img => img.dataUrl && !img.error)
-        .map(img => ({
-          data: img.dataUrl,
-          type: img.type,
-          name: img.name,
-          size: img.size
-          // captions: can be extended if supporting per-image captions later
-        }));
-    }
-
-    // If no conversation is selected (or it doesn't exist; i.e., new conversation), create it first, then send
-    if (!currentConv) {
-      try {
-        // Create new conversation
-        const res = await apiFetch('/conversations', {
-          method: 'POST',
-          body: JSON.stringify({})
-        });
-        if (!res.ok) {
-          setChatError('Unable to start a new conversation.');
-          setSendLoading(false);
-          setStreaming(false);
-          return;
-        }
-        const newConv = await res.json();
-        if (!(newConv && newConv._id)) {
-          setChatError('Conversation creation failed.');
-          setSendLoading(false);
-          setStreaming(false);
-          return;
-        }
-        setConversations(prev => [newConv, ...prev]);
-        setSelected(newConv._id);
-        setCurrentConv(newConv);
-        // Now send the message via socket (wait for setState flush)
-        setTimeout(() => {
-          if (socket) {
-            socket.emit('message', {
-              conversationId: newConv._id,
-              message: inputValue,
-              images: imagesPayload.length > 0 ? imagesPayload : undefined
-            });
-          }
-        }, 0); // next tick, after UI state
-      } catch (e) {
-        setChatError('Network error creating conversation.');
-        setSendLoading(false);
-        setStreaming(false);
-        return;
-      }
-    } else {
-      // Existing conversation, use socket directly
-      if (!socket || !currentConv || (!inputValue.trim() && imagesPayload.length === 0)) {
-        setSendLoading(false);
-        setStreaming(false);
-        return;
-      }
-      socket.emit('message', {
-        conversationId: currentConv._id,
-        message: inputValue,
-        images: imagesPayload.length > 0 ? imagesPayload : undefined
-      });
-    }
-    // Note: input clearing is handled below after stream start/accept.
+    // Placeholder -- now handled in ConversationView, including image validation and calling onSend as needed.
+    // This function remains for API compatibility, but does not handle images directly.
   }
   // Show main UI
   function renderMainContent() {
@@ -477,39 +394,12 @@ function App() {
             streaming={streaming}
             inputValue={inputValue}
             onInputChange={e => setInputValue(e.target.value)}
-            // Canonicalizes image state; disables Send if *any* image not loaded or errored
             onSend={async () => {
-              // Don't allow send if any images are still loading or errored
-              const hasPendingImages = imageUploads.some(
-                img => !img.dataUrl && !img.error
-              );
-              const hasErroredImages = imageUploads.some(img => img.error);
-              if (hasPendingImages) {
-                setImageInputError('Please wait for all images to finish uploading.');
-                return;
-              }
-              if (hasErroredImages) {
-                setImageInputError('Please remove or fix all errored images before sending.');
-                return;
-              }
-              await handleSend();
-              setInputValue('');
-              setImageUploads([]);
+              // No-op in App. ConversationView handles message send and image upload state.
             }}
-            imageUploads={imageUploads}
-            onImagesChange={imgs => {
-              setImageUploads(imgs);
-              setImageInputError('');
-            }}
-            disabled={
-              sendLoading ||
-              streaming ||
-              convLoading ||
-              imageUploads.some(img => !img.dataUrl && !img.error) ||
-              imageUploads.some(img => img.error)
-            }
+            disabled={sendLoading || streaming || convLoading}
             placeholder="Type your message and hit Send…"
-            error={chatError || imageInputError}
+            error={chatError}
           />
         </div>
       </div>
@@ -552,7 +442,9 @@ function App() {
 // On successful message send and stream start (first chunk or streamEnd), clear inputValue (unless message was rejected)
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
+
 export default App;
+
 
 
 

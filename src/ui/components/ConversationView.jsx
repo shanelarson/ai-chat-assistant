@@ -21,13 +21,7 @@ import ImageUploadInput from './ImageUploadInput.jsx';
  */
 /**
  * Unified ConversationView for chat UI, with image upload.
- * IMAGE STATE is now fully controlled by parent (App). This component receives:
- * - images: current image file objects (see app.jsx state), each with dataUrl/type/name/size/error
- * - onImageChange: handler to update images state
- * - imageInputError: error string for images
- * - hasPendingImages: bool, true if any attached image is still being encoded or has error
- *
- * This prevents desync and bugs where a stale image state disables/rejects send.
+ * IMAGE STATE is managed locally in this component (full control).
  */
 export default function ConversationView({
   conversation,
@@ -38,23 +32,70 @@ export default function ConversationView({
   onSend,
   disabled,
   placeholder,
-  error,
-  images = [],
-  onImageChange,
-  imageInputError = '',
-  hasPendingImages = false
+  error
 }) {
   const messagesEndRef = useRef(null);
+  // --- Images state for send box ---
+  const [images, setImages] = useState([]);
+  const [imgError, setImgError] = useState('');
+  // Synchronized: if inputValue changes after send, clear images
+  useEffect(() => {
+    if (!inputValue && images.length > 0) setImages([]);
+    // eslint-disable-next-line
+  }, [inputValue]);
   useEffect(() => {
     if (messagesEndRef.current) {
+      // Scroll to bottom on new messages/stream
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [conversation, streaming, inputValue]);
 
-  // Start: prevent send unless all images are loaded (no error, base64 present)
-  const sendBtnDisabled = disabled || loading || streaming || hasPendingImages;
-  const messageInputError = error || imageInputError;
+  // Handler for image attachment change (reset imgError on change)
+  function handleImageChange(newImages) {
+    setImages(newImages);
+    setImgError('');
+  }
 
+  // Custom onSend with images
+  async function handleSendWithImages() {
+    // Frontend validation: all images must be valid, loaded, no error, < max
+    if (loading || streaming || disabled) return;
+    let firstError = null;
+    if (Array.isArray(images) && images.length > 0) {
+      if (images.length > 4) {
+        setImgError('You can attach up to 4 images.');
+        return;
+      }
+      for (let img of images) {
+        if (img.error) {
+          firstError = img.error;
+          break;
+        }
+        if (!/^data:image\//.test(img.dataUrl || '')) {
+          firstError = 'Attached file could not be read as an image.';
+          break;
+        }
+        if (!img.file) {
+          firstError = 'Unknown image error. Please remove and re-add.';
+          break;
+        }
+      }
+    }
+    if (firstError) {
+      setImgError(firstError);
+      return;
+    }
+    setImgError('');
+    // DEFER to onSend: pass images in custom event
+    if (typeof onSend === 'function') {
+      onSend(inputValue);
+    }
+    // UI clears handled after success/error by parent
+  }
+  // Start: prevent send unless all images are loaded (no error, base64 present)
+  const hasPendingImages = Array.isArray(images) && images.some(img => (!img.dataUrl && !img.error) || img.error);
+  const sendBtnDisabled = disabled || loading || streaming || hasPendingImages;
+  const messageInputError = error || imgError;
   if (!conversation) {
     // Starting a new conversation
     return (
@@ -79,7 +120,7 @@ export default function ConversationView({
         <MessageInput
           value={inputValue}
           onChange={onInputChange}
-          onSend={onSend}
+          onSend={handleSendWithImages}
           loading={loading || streaming}
           disabled={disabled}
           error={error}
@@ -142,15 +183,15 @@ export default function ConversationView({
       <div style={{ borderTop: '1px solid #e3e6ea', background: '#fcfcfe', padding: '1em 1.2em 1em 1.3em' }}>
         <ImageUploadInput
           images={images}
-          onChange={onImageChange}
+          onChange={handleImageChange}
           loading={loading || streaming || disabled}
-          error={imageInputError}
+          error={imgError}
         />
         <MessageInput
           value={inputValue}
           onChange={onInputChange}
-          onSend={onSend}
-          loading={loading || streaming || hasPendingImages}
+          onSend={handleSendWithImages}
+          loading={loading || streaming}
           disabled={sendBtnDisabled}
           error={messageInputError}
           placeholder={placeholder}
@@ -563,6 +604,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
