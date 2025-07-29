@@ -291,24 +291,12 @@ function App() {
     setStreaming(false);
   }
   function handleStartNew() {
-    // For now, create new empty conversation on backend
-    setConvLoading(true);
-    apiFetch('/conversations', {
-      method: 'POST',
-      body: JSON.stringify({})
-    })
-
-
-      .then(res => res.json())
-      .then(newConv => {
-        if (newConv && newConv._id) {
-          setConversations([newConv, ...conversations]);
-          setSelected(newConv._id);
-        }
-      })
-      .finally(() => setConvLoading(false));
-    setChatError('');
+    // No conversation is created until the user SENDS their first message;
+    // This function just sets UI state for a "new conversation" screen.
+    setSelected(null);
+    setCurrentConv(null);
     setInputValue('');
+    setChatError('');
     setSendLoading(false);
     setStreaming(false);
   }
@@ -455,10 +443,11 @@ function App() {
                 content: userMsgContent,
                 createdAt: now,
                 pending: true,
-                // New conversation doesn't have _id yet, so omit conversationId
+                // For new conversation, pendingUserMsg has no conversationId property
               };
               setPendingUserMsg(pendingMsgObj);
               if (!currentConv || !currentConv._id) {
+                // Starting a new conversation: create on backend, use its _id, then send message.
                 setSendLoading(true);
                 setChatError('');
                 setStreaming(false);
@@ -469,9 +458,11 @@ function App() {
                   });
                   const newConv = await res.json();
                   if (newConv && newConv._id) {
+                    // Immediately select/switch UI to new conversation
                     setConversations([newConv, ...conversations]);
                     setSelected(newConv._id);
                     setCurrentConv(newConv);
+                    // Now send the first message in this conversation
                     setSendLoading(true);
                     setStreaming(true);
                     socket.emit('message', {
@@ -480,6 +471,8 @@ function App() {
                       images: imagesToSend
                     });
                     setInputValue('');
+                    // Attach conversationId to pendingUserMsg so React knows which convo it's now part of
+                    setPendingUserMsg({ ...pendingMsgObj, conversationId: newConv._id });
                   } else {
                     setChatError('Failed to create new conversation.');
                   }
@@ -488,7 +481,6 @@ function App() {
                 } finally {
                   setSendLoading(false);
                 }
-                setPendingUserMsg(null);
                 return;
               }
               // Existing conversation: send as normal
@@ -501,6 +493,7 @@ function App() {
                 images: imagesToSend
               });
               setInputValue('');
+              setPendingUserMsg({ ...pendingMsgObj, conversationId: currentConv._id });
             }}
             disabled={sendLoading || streaming || convLoading}
             placeholder="Type your message and hit Send…"
@@ -532,7 +525,15 @@ function App() {
         setPendingUserMsg(null);
       }
     }
-    // Also clear if a new conversation is selected
+    // Also clear if a new conversation is selected (e.g. user hits Back/New Conversation)
+    if (
+      !currentConv ||
+      (pendingUserMsg &&
+        pendingUserMsg.conversationId &&
+        currentConv._id !== pendingUserMsg.conversationId)
+    ) {
+      setPendingUserMsg(null);
+    }
   }, [currentConv && currentConv.messages && currentConv.messages.length, currentConv && currentConv._id, pendingUserMsg]);
   // Helpers for stable message ordering and deep content comparison
   function getMsgTimestamp(msg) {
@@ -622,6 +623,7 @@ export default App;
 
 
  
+
 
 
 

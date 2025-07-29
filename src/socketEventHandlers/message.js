@@ -278,3 +278,5 @@ export default async function handleMessage(socket, payload) {
 // If user sends images, images and text are combined in a single 'user' message's content as an OpenAI multimodal array.
 // There are never standalone 'image' messages in the messages array.
 
+
+

@@ -215,7 +215,10 @@ export default function ConversationView({
           value={inputValue}
           onChange={onInputChange}
           // Parent onSend handler (App) manages pendingUserMsg display and backend order, so just proxy
-          onSend={() => onSend && onSend(inputValue, images.filter(img => img.dataUrl && !img.error))}
+          onSend={() => {
+            // Combine images and text as a single user message; images as dataUrl base64s
+            if (onSend) onSend(inputValue, images.filter(img => img.dataUrl && !img.error));
+          }}
           loading={loading || streaming}
           disabled={false}
           error={messageInputError}
@@ -306,7 +309,6 @@ function MessageBubble({ type, content, streaming, label, pending }) {
       </div>
     );
   }
-
   // 2. If assistant message and streaming (i.e. incomplete, may contain partial markdown/code blocks),
   //    ALWAYS render as preformatted plain text, NOT markdown, to preserve unfinished code blocks/language tags etc.
   //    This avoids broken parsing, broken code fences, and allows post-stream code highlighting to work!
@@ -687,6 +689,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 
