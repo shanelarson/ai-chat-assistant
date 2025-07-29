@@ -312,19 +312,66 @@ function App() {
     setSendLoading(false);
     setStreaming(false);
   }
-  // Send a new message via socket
-  function handleSend() {
-    if (!socket || !currentConv || !inputValue.trim() || sendLoading || streaming) return;
+  // Send handler: handles both new and existing conversations when user presses Send.
+  async function handleSend() {
+    if (sendLoading || streaming || !inputValue.trim() || convLoading) return; // prevent duplicates
     setSendLoading(true);
     setStreaming(true);
     setChatError('');
-    // Emit to socket (backend handles rest). Do not optimistically update conversation state or clear input yet
-    socket.emit('message', {
-      conversationId: currentConv._id,
-      message: inputValue
-    });
-    // Only clear input if the message will be accepted (we'll clear it on send success, i.e. when no rejection message comes)
-    // setInputValue(''); <-- moved logic: see below
+
+    // If no conversation is selected (or it doesn't exist; i.e., new conversation), create it first, then send
+    if (!currentConv) {
+      try {
+        // Create new conversation
+        const res = await apiFetch('/conversations', {
+          method: 'POST',
+          body: JSON.stringify({})
+        });
+        if (!res.ok) {
+          setChatError('Unable to start a new conversation.');
+          setSendLoading(false);
+          setStreaming(false);
+          return;
+        }
+        const newConv = await res.json();
+        if (!(newConv && newConv._id)) {
+          setChatError('Conversation creation failed.');
+          setSendLoading(false);
+          setStreaming(false);
+          return;
+        }
+        setConversations(prev => [newConv, ...prev]);
+        setSelected(newConv._id);
+        setCurrentConv(newConv);
+        // Now send the message via socket (wait for setState flush)
+        setTimeout(() => {
+          if (socket) {
+            socket.emit('message', {
+              conversationId: newConv._id,
+              message: inputValue
+            });
+          }
+        }, 0); // next tick, after UI state
+      } catch (e) {
+        setChatError('Network error creating conversation.');
+        setSendLoading(false);
+        setStreaming(false);
+        return;
+      }
+    } else {
+      // Existing conversation, use socket directly
+      if (!socket || !currentConv || !inputValue.trim()) {
+        setSendLoading(false);
+        setStreaming(false);
+        return;
+      }
+      socket.emit('message', {
+        conversationId: currentConv._id,
+        message: inputValue
+      });
+    }
+    // Note: clearInputValue handled after stream start/accept.
+    // setInputValue(''); -- handled by ConversationView's onSend
   }
   // Show main UI
   function renderMainContent() {
@@ -451,4 +498,5 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
+
 

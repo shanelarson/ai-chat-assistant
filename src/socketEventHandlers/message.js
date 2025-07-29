@@ -65,8 +65,8 @@ export default async function handleMessage(socket, payload) {
       messagesArr[messagesArr.length - 1].type === 'user'
     ) {
       socket.emit('messageRejected', {
-        error: 'Please wait for the assistant to respond before sending another message.',
-        rejectedMessage: message,
+        reason: 'Please wait for the assistant to respond before sending another message.',
+        message: message,
         conversationId
       });
       return;
@@ -168,5 +168,4 @@ export default async function handleMessage(socket, payload) {
 // Note: Socket.IO server is configured to use the correct port and CORS (see src/index.js)
 // Event names must match between frontend and backend (see app.jsx and here).
 // See documentation for configuration of environment variables for CORS and ports.
-
 

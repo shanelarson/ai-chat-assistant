@@ -103,6 +103,8 @@ export default function ConversationView({
             type={msg.type}
             content={msg.content}
             index={idx}
+            // Label messages clearly as 'User' or 'Assistant'
+            label={msg.type === 'user' ? 'User' : 'Assistant'}
           />
         ))}
         {/* When AI is streaming in a reply, show feedback */}
@@ -112,6 +114,7 @@ export default function ConversationView({
             content={<span style={{ color: '#aaa' }}>Typing...</span>}
             index={messages.length}
             streaming
+            label="Assistant"
           />
         }
         <div ref={messagesEndRef} />
@@ -128,18 +131,55 @@ export default function ConversationView({
     </section>
   );
 }
-
 // Render a message bubble in chat UI: `type` is 'user' or 'assistant'
-function MessageBubble({ type, content, streaming }) {
+function MessageBubble({ type, content, streaming, label }) {
   const isUser = type === 'user';
   return (
     <div
       style={{
         display: 'flex',
         justifyContent: isUser ? 'flex-end' : 'flex-start',
-        marginBottom: 12
+        marginBottom: 12,
+        flexDirection: 'column',
+        alignItems: isUser ? 'flex-end' : 'flex-start'
       }}
     >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          marginBottom: 2,
+        }}
+      >
+        {!isUser && (
+          <span style={{
+            fontSize: 12,
+            color: '#d0b900',
+            fontWeight: 600,
+            marginRight: 8,
+            background: 'rgba(220,220,255,0.17)',
+            padding: '0 6px',
+            borderRadius: 5,
+            letterSpacing: 0.2
+          }}>
+            {label || 'Assistant'}
+          </span>
+        )}
+        {isUser && (
+          <span style={{
+            fontSize: 12,
+            color: '#176cd9',
+            fontWeight: 600,
+            marginLeft: 8,
+            background: 'rgba(220,230,253,0.16)',
+            padding: '0 6px',
+            borderRadius: 5,
+            letterSpacing: 0.2
+          }}>
+            {label || 'User'}
+          </span>
+        )}
+      </div>
       <div
         style={{
           maxWidth: '85%',
