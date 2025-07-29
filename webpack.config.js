@@ -91,7 +91,7 @@ export default {
         target: API_URL,
         changeOrigin: true,
         secure: false,
-        pathRewrite: { '^/api': '' }
+        // pathRewrite: { '^/api': '' }
       }
     },
     client: {
