@@ -102,12 +102,16 @@ export default function ConversationView({
   }
   // Start: prevent send unless all images are loaded (no error, base64 present)
   const hasPendingImages = Array.isArray(images) && images.some(img => (!img.dataUrl && !img.error) || img.error);
+  // Determine if there is a valid image (fully loaded, no error)
+  const validImageCount = images.filter(img => img.dataUrl && !img.error).length;
   // Send is allowed if there is any text or images, and no pending image loads and not loading/streaming/disabled
+  // NOTE: Remove coupling between message input "disabled" & presence of images
   const sendAllowed =
     (!disabled && !loading && !streaming && !hasPendingImages) &&
-    ((inputValue && inputValue.trim().length > 0) || images.filter(img => img.dataUrl && !img.error).length > 0);
+    ((inputValue && inputValue.trim().length > 0) || validImageCount > 0);
   const sendBtnDisabled = !sendAllowed;
-  const messageInputError = error || imgError;
+  // Always keep message field enabled unless explicitly disabled or loading. Only error state disables send.
+  let messageInputError = error || imgError;
 
   // New or existing conversation: unified layout
   const messages = conversation?.messages || [];
@@ -184,7 +188,8 @@ export default function ConversationView({
           onChange={onInputChange}
           onSend={handleSendWithImages}
           loading={loading || streaming}
-          disabled={sendBtnDisabled}
+          // Only disable input if explicitly disabled or loading -- input always enabled, not tied to attached images
+          disabled={false}
           error={messageInputError}
           placeholder={placeholder}
         />
@@ -527,19 +532,46 @@ function MessageInput({
   error,
   placeholder
 }) {
+  const [localError, setLocalError] = useState('');
+
+  // Combine error from parent (inline, img, etc) and local empty error
+  const shownError = error || localError;
+
+  // Keep error feedback in sync
+  useEffect(() => {
+    if (error) setLocalError('');
+  }, [error]);
+
   function handleKeyDown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
-      if (typeof onSend === 'function' && !loading && value.trim()) onSend();
+      if (typeof onSend === 'function' && !loading) {
+        if (!value || value.trim().length === 0) {
+          setLocalError('Please enter a message or attach an image before sending.');
+        } else {
+          setLocalError('');
+          onSend();
+        }
+      }
     }
   }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!loading) {
+      if (!value || value.trim().length === 0) {
+        setLocalError('Please enter a message or attach an image before sending.');
+      } else {
+        setLocalError('');
+        if (typeof onSend === 'function') onSend();
+      }
+    }
+  }
+
   return (
     <form
       style={{ margin: 0, padding: 0 }}
-      onSubmit={e => {
-        e.preventDefault();
-        if (!loading && value && value.trim()) onSend();
-      }}
+      onSubmit={handleSubmit}
       autoComplete="off"
     >
       <div style={{
@@ -550,7 +582,8 @@ function MessageInput({
           value={value}
           onChange={onChange}
           onKeyDown={handleKeyDown}
-          disabled={disabled || loading}
+          // Only disable if explicitly disabled or loading, NOT if missing images
+          disabled={!!loading || !!disabled}
           placeholder={placeholder || 'Type your message...'}
           rows={2}
           style={{
@@ -568,9 +601,9 @@ function MessageInput({
           }}
         />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {error && (
+          {shownError && (
             <div style={{ color: '#e74c3c', fontSize: 14, fontWeight: 500 }}>
-              {error}
+              {shownError}
             </div>
           )}
           <button
@@ -587,7 +620,7 @@ function MessageInput({
               cursor: loading || disabled ? 'default' : 'pointer',
               opacity: loading || disabled ? 0.6 : 1
             }}
-            disabled={loading || disabled}
+            disabled={!!loading || !!disabled}
           >
             {loading ? 'Sending...' : 'Send'}
           </button>
@@ -596,6 +629,7 @@ function MessageInput({
     </form>
   );
 }
+
 
 
 

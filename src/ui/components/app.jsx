@@ -396,17 +396,52 @@ function App() {
             onInputChange={e => setInputValue(e.target.value)}
             onSend={async (messageToSend, imagesToSend = []) => {
               if (!socket) return;
-              // Compose send conditions:
-              // - Allow sending if message (nonempty trimmed string) OR if images has at least 1 valid entry
-              // (Do not allow send if both are empty, or if already loading, or convLoading, or streaming)
               const trimmedMsg = typeof messageToSend === "string" ? messageToSend.trim() : "";
               const hasText = trimmedMsg.length > 0;
               const hasImages = Array.isArray(imagesToSend) && imagesToSend.length > 0;
-              if ((!hasText && !hasImages) || sendLoading || streaming || convLoading) {
-                // Should not happen, but guard
+              // Prevent sending if both are missing, show error inline
+              if (!hasText && !hasImages) {
+                setChatError("Please enter a message or attach an image before sending.");
                 return;
               }
-              if (!currentConv || !currentConv._id) return; // no conversation exists
+              if (sendLoading || streaming || convLoading) {
+                return;
+              }
+              // If no conversation selected (starting new), create one and send the message
+              if (!currentConv || !currentConv._id) {
+                setSendLoading(true);
+                setChatError('');
+                setStreaming(false);
+                // Create new conversation, then send
+                try {
+                  const res = await apiFetch('/conversations', {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                  });
+                  const newConv = await res.json();
+                  if (newConv && newConv._id) {
+                    setConversations([newConv, ...conversations]);
+                    setSelected(newConv._id);
+                    setCurrentConv(newConv);
+                    setSendLoading(true);
+                    setStreaming(true);
+                    socket.emit('message', {
+                      conversationId: newConv._id,
+                      message: trimmedMsg,
+                      images: imagesToSend
+                    });
+                    setInputValue('');
+                  } else {
+                    setChatError('Failed to create new conversation.');
+                  }
+                } catch (err) {
+                  setChatError('Failed to create new conversation.');
+                } finally {
+                  setSendLoading(false);
+                }
+                return;
+              }
+              // Existing conversation: send as normal
               setSendLoading(true);
               setChatError('');
               setStreaming(true); // expect stream
@@ -473,4 +508,4 @@ export default App;
 
 
 
-
+ 
