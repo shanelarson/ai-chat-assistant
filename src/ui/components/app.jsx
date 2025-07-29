@@ -61,17 +61,17 @@ function App() {
       }
     });
   }, [token]);
-
   // ----- Auth handler -----
   async function handleLogin({ email, password }) {
     setLoginLoading(true);
     setLoginError('');
     try {
-      // Use proxy path to avoid CORS in development
-      const res = await fetch('/api/login', {
+      // Use apiFetch to ensure correct Authorization header management
+      const res = await apiFetch('/login', {
         method: 'POST',
+        body: JSON.stringify({ email, password }),
+        // Pass headers through so Content-Type is set (apiFetch merges with token logic)
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -91,11 +91,11 @@ function App() {
     setSignupLoading(true);
     setSignupError('');
     try {
-      // Use proxy path to avoid CORS in development
-      const res = await fetch('/api/signup', {
+      // Use apiFetch to ensure correct Authorization header management
+      const res = await apiFetch('/signup', {
         method: 'POST',
+        body: JSON.stringify({ email, password }),
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -111,6 +111,8 @@ function App() {
       setSignupLoading(false);
     }
   }
+
+
 
   function handleLogout() {
     setToken('');
@@ -418,4 +420,5 @@ function App() {
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared.
 export default App;
+
 
