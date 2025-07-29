@@ -29,8 +29,8 @@ export async function connectToMongo() {
     useUnifiedTopology: true
   });
   await client.connect();
-  // Use the database name from the URI string (after last '/')
-  const dbName = uri.substring(uri.lastIndexOf('/') + 1).split('?')[0];
+  // Use the fixed database name for the entire application
+  const dbName = "ai_chat_assistant";
   db = client.db(dbName);
   return db;
 }
