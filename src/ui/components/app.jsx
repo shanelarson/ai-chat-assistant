@@ -4,15 +4,10 @@ import LoginModal from './LoginModal.jsx';
 import SignupModal from './SignupModal.jsx';
 import ConversationList from './ConversationList.jsx';
 import ConversationView from './ConversationView.jsx';
-
 // Endpoints/Socket URLs from env
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'ws://localhost:4000';
-
-// Polyfill fetch for node/test environments, if needed
-// Frontend should have fetch
-
-export default function App() {
+function App() {
   // Auth state
   const [token, setToken] = useState(() => localStorage.getItem('token') || '');
   const [loggedIn, setLoggedIn] = useState(!!token);
@@ -422,3 +417,5 @@ export default function App() {
 // On successful message send and stream start (first chunk or streamEnd), clear inputValue (unless message was rejected)
 // This is handled implicitly: since we only clear inputValue after a call to handleSend, and if a message is rejected, setInputValue is called to restore the rejected message.
 // If stream starts/ends normally, the input is already cleared, as designed.
+
+export default App;

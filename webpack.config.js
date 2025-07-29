@@ -19,7 +19,7 @@ const PUBLIC_URL = process.env.PUBLIC_URL || '/';
 
 export default {
   mode,
-  entry: path.resolve(__dirname, 'src/ui/components/app.jsx'),
+  entry: path.resolve(__dirname, 'src/ui/components/index.jsx'),
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'bundle.[contenthash].js',
