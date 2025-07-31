@@ -1,4 +1,5 @@
 
+console.log('Yo');
 import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -213,6 +214,7 @@ if (SOCKET_IO_PORT !== SERVER_PORT) {
     logDbEnvContext('Socket.IO Startup Context').then();
   });
 }
+
 
 
 
